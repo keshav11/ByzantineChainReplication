@@ -4,13 +4,38 @@ replica_module = import_da('replica')
 class Olympus(process):
     def setup(num_replica:int):
         output("olympus: setup finished num_replica:", num_replica)
+        self.replicas_public_keys = []
+        self.configuration = []  # current configuration
+
+    def generate_keys():
+        """TODO: genererate keys"""
+        key_pair = ("asd","asdas")
+        self.replicas_public_keys.append(key_pair[0])
+        return key_pair
 
     def run():
-        # creating num_replica replicas
+        """ creating num_replica replicas """
         output("olympus:run started")
-        replicas = new(replica_module.Replica, [], num=num_replica)
-        start(replicas)
+        start_replicas()
         output("olympus: run finished")
+
+    def start_replicas():
+        """start num_replicas replicas"""
+        output("olympus:start_replicas started")
+        for replica in range(num_replica):
+            key_pair = generate_keys()
+            replica = new(replica_module.Replica, [key_pair], num=num_replica)
+            self.configuration.append(replica)
+            start(replica)
+
+        """send public keys to replica"""
+        for replica in self.configuration:
+            send(('replicas_public_keys', self.replicas_public_keys), to= replica)
+            """TODO: remove this"""
+            send(('done', ), to=replica)
+
+        """TODO: send public keys to clients"""
+        output("olympus:start_replicas finished")
 
 
 def main():

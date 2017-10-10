@@ -1,7 +1,17 @@
 class Replica(process):
 
-    def setup():
+    def setup(crypto_keys:tuple):
         output("replica: setup finished")
+        self.replicas_public_keys = []
+
+    def receive(msg= ('replicas_public_keys', replicas_public_keys)):
+        self.replicas_public_keys = replicas_public_keys
+        output("replica: receive replicas_public_keys finished")
+
+    def run():
+        output("replica: run started")
+        await(received(('done',)))
+        output("replica: run finished")
 
 def main():
     pass

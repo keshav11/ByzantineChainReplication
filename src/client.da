@@ -1,9 +1,10 @@
 class Client(process):
     def setup():
-        pass
+        output("client created")
+
 
     def run():
-        output('client here mofo!')
+        pass
 
 
 def main():
