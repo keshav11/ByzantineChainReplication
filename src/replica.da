@@ -1,2 +1,6 @@
+class Replica(process):
+    def setup():
+        pass
+
 def main():
     pass

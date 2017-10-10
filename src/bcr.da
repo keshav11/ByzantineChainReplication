@@ -1,2 +1,18 @@
+import os
+import_da('olympus') as Olympus
+
+
 def main():
+    config_file = 'config1.txt'
+    config = {}
+    with open(os.path.join(os.path.abspath(''), 'config', config_file), 'r') as input:
+        for line in input:
+            if line[0] != '#':
+                (key, sep, val) = line.partition('=')
+                if len(sep) != 0:
+                    val = val.strip()
+                    config[key.strip()] = val
+
+    print(config)
+
     pass

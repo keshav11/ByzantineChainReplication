@@ -1,2 +1,7 @@
+class Client(process):
+    def setup():
+        pass
+
+
 def main():
     pass
