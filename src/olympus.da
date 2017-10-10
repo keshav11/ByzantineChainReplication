@@ -1,17 +1,16 @@
 replica_module = import_da('replica')
 
+
 class Olympus(process):
     def setup(num_replica:int):
         output(num_replica)
 
     def run():
-        replicas = new(replica_module.Replica, num= num_replica)
-
-
-
-
+        # creating num_replica replicas
+        replicas = new(replica_module.Replica, [], num=num_replica)
+        start(replicas)
 
 
 def main():
-    olympys = new(Olympus, [ 3 ])
-    start(olympys)
+    olympus = new(Olympus, [ 1 ])
+    start(olympus)
