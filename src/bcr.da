@@ -2,6 +2,7 @@ import os
 olympus_module = import_da('olympus')
 client_module = import_da('client')
 
+
 def main():
     config_file = 'config1.txt'
     config = {}
@@ -13,9 +14,21 @@ def main():
                     val = val.strip()
                     config[key.strip()] = int(val) if str.isdecimal(val) else val
 
-    #print(config)
+    print(config)
+
+    clients = []
+
+    for i in range(config['num_client']):
+        client_workload_key = 'workload[' + str(i) + ']'
+        client = new(client_module.Client, [i, config[client_workload_key]], num=1)
+        clients.append(client)
+        start(client)
+
+    """ starting olympus """
     num_replicas = 2*config['t']+1
-    olympus = new(olympus_module.Olympus, [num_replicas], num=1)
-    clients = new(client_module.Client, [], num=config['num_client'])
+    olympus = new(olympus_module.Olympus, [num_replicas, clients], num=1)
     start(olympus)
-    start(clients)
+
+
+
+    output('node process is terminating')

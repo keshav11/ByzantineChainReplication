@@ -1,11 +1,42 @@
+import time
+import sys
+
 class Client(process):
-    def setup():
-        output("client created")
-
-
-    def run():
+    def setup(client_id, workload):
+        self.olympus = None
+        self.config = None
+        output("client setup")
         pass
 
+    def receive(msg= ('olympus', olympus)):
+        self.olympus = olympus
+        send(("olympus_received", self), to=self.olympus)
+
+    def receive(msg= ('config', config)):
+        self.config = config
+
+    def fetch_config():
+        send(('get_config', self), to=self.olympus)
+        await(received(('config',self.config)))
+
+    def run():
+        output("waiting for olympus...")
+        await(received(('olympus', self.olympus)))
+        output("received olmypus...")
+        output("olympus is ", self.olympus, " now fetching config...")
+        fetch_config()
+        output("config call returned...")
+        return
+        """
+        workload = workload.split(';')
+        for i in range(len(workload)):
+            request = workload[i].strip()
+            request_id = str(client_id) + '_' + str(i)
+            output("sending request with id ", request_id)
+            send(("request", request, request_id, retransmitted=0), to=head)
+            time.sleep(1)
+        output('client here mofo!')
+        """
 
 def main():
     pass

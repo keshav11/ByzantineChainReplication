@@ -2,7 +2,7 @@ replica_module = import_da('replica')
 
 
 class Olympus(process):
-    def setup(num_replica:int):
+    def setup(num_replica:int, clients):
         output("olympus: setup finished num_replica:", num_replica)
         self.replicas_public_keys = []
         self.configuration = []  # current configuration
@@ -13,11 +13,22 @@ class Olympus(process):
         self.replicas_public_keys.append(key_pair[0])
         return key_pair
 
+    def receive(msg= ('get_config', client)):
+        send(('config', 'lele'), to=client)
+
     def run():
         """ creating num_replica replicas """
         output("olympus:run started")
+        register_to_clients()
+        output("registered to clients...")
         start_replicas()
         output("olympus: run finished")
+
+    def register_to_clients():
+        for client in clients:
+            output("sending register request to client ", client)
+            send(('olympus', self), to=client)
+        await(each(client in clients, has=received(('olympus_received', client))))
 
     def start_replicas():
         """start num_replicas replicas"""
