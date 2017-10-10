@@ -1,6 +1,7 @@
 class Replica(process):
+
     def setup():
-        pass
+        output("replica: setup finished")
 
 def main():
     pass

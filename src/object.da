@@ -1,4 +1,5 @@
 class Object:
+
     def __init__(self):
         self.state = {}
 
@@ -13,6 +14,7 @@ class Object:
 
     def append(self, key, value):
         pass
+
 
 def main():
     o = Object()
