@@ -1,5 +1,5 @@
 import os
-import_da('olympus') as Olympus
+import_da('olympus')
 
 
 def main():
