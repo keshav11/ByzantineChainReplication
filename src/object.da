@@ -1,0 +1,20 @@
+class Object:
+    def __init__(self):
+        self.state = {}
+
+    def put(self, key, value):
+        self.state[key] = value
+
+    def get(self, key):
+        return self.state[key]
+
+    def slice(self, key, slice):
+        pass
+
+    def append(self, key, value):
+        pass
+
+def main():
+    o = Object()
+    o.put("key1", "val1")
+    print(o.get("key1"))
