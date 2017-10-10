@@ -1,6 +1,6 @@
 import os
-import_da('olympus')
-
+olympus_module = import_da('olympus')
+client_module = import_da('client')
 
 def main():
     config_file = 'config1.txt'
@@ -11,8 +11,11 @@ def main():
                 (key, sep, val) = line.partition('=')
                 if len(sep) != 0:
                     val = val.strip()
-                    config[key.strip()] = val
+                    config[key.strip()] = int(val) if str.isdecimal(val) else val
 
-    print(config)
-
-    pass
+    #print(config)
+    num_replicas = 2*config['t']+1
+    olympus = new(olympus_module.Olympus, [num_replicas], num=1)
+    clients = new(client_module.Client, [], num=config['num_client'])
+    start(olympus)
+    start(clients)
