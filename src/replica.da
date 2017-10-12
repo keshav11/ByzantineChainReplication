@@ -8,9 +8,13 @@ class Replica(process):
         self.replicas_public_keys = replicas_public_keys
         output("replica: receive replicas_public_keys finished")
 
+    def receive(msg=('request', request_id, request, retransmitted)):
+        output("received request with id ", request_id)
+
     def run():
         output("replica: run started")
         await(received(('done',)))
+        await(received('request',))
         output("replica: run finished")
 
 def main():

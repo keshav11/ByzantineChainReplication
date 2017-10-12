@@ -4,7 +4,8 @@ import sys
 class Client(process):
     def setup(client_id, workload):
         self.olympus = None
-        self.config = None
+        self.configuration = None
+        self.head = None
         output("client setup")
         pass
 
@@ -13,30 +14,30 @@ class Client(process):
         send(("olympus_received", self), to=self.olympus)
 
     def receive(msg= ('config', config)):
-        self.config = config
+        self.configuration = config
+        """ TODO config validation"""
+        self.head = self.configuration[0]
 
     def fetch_config():
         send(('get_config', self), to=self.olympus)
-        await(received(('config',self.config)))
+        await(received(('config',self.configuration)))
 
     def run():
-        output("waiting for olympus...")
+        output("waiting for olympus to contact...")
         await(received(('olympus', self.olympus)))
-        output("received olmypus...")
-        output("olympus is ", self.olympus, " now fetching config...")
+        output("client received olympus ", self.olympus)
         fetch_config()
-        output("config call returned...")
-        return
-        """
+        output("client received config from olympus ", self.configuration)
+
         workload = workload.split(';')
         for i in range(len(workload)):
             request = workload[i].strip()
             request_id = str(client_id) + '_' + str(i)
-            output("sending request with id ", request_id)
-            send(("request", request, request_id, retransmitted=0), to=head)
+            output("sending request with id ", request_id, " and request workload ", request)
+            send(('request', request_id, request, 0), to=self.head)
             time.sleep(1)
-        output('client here mofo!')
-        """
+        output('client run finished!')
+
 
 def main():
     pass
