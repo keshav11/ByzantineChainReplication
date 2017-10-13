@@ -4,19 +4,49 @@ class Object:
         self.state = {}
 
     def put(self, key, value):
+        print('In put:', key, value)
         self.state[key] = value
+        return 'OK'
 
     def get(self, key):
-        return self.state[key]
+        print('In get:', key)
+        try:
+            return self.state[key]
+        except KeyError:
+            print('error: key does not exist:', key)
 
-    def slice(self, key, slice):
-        pass
+    def slice(self, key, value): # TODO
+        # TODO
+        print('In slice:', key, value)
 
-    def append(self, key, value):
-        pass
+    def append(self, key, value): # TODO
+        print('In append:', key, value)
+
+    def evaluate_request(self, request):
+        print('In evaluate_request:', request)
+        request = request.strip()
+        if request.startswith('get'):
+            processed_request = request.strip()[4:-1]
+            return self.get(processed_request.strip().strip('\''))
+        elif request.startswith('put'):
+            key_val = request.strip()[4:-1].strip().split(',')
+            return self.put(key_val[0].strip().strip('\''),
+                            key_val[1].strip().strip('\''))
+        elif request.startswith('append'):
+            key_val = request.strip()[7:-1].strip().split(',')
+            return self.append(key_val[0].strip().strip('\''),
+                               key_val[1].strip().strip('\''))
+        elif request.startswith('slice'):
+            key_val = request.strip()[6:-1].strip().split(',')
+            return self.slice(key_val[0].strip().strip('\''),
+                              key_val[1].strip().strip('\''))
 
 
 def main():
+    # Testing Object
     o = Object()
-    o.put("key1", "val1")
-    print(o.get("key1"))
+    o.evaluate_request('put(\'fruit\',\'apple\')')
+    o.evaluate_request('get(\'fruit\')')
+    o.evaluate_request('slice(\'fruit\',\'apple\')')
+    o.evaluate_request('append(\'fruit\',\'apple\')')
+

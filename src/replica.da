@@ -1,8 +1,12 @@
+object_module = da.import_da('object')
+
 class Replica(process):
 
     def setup(crypto_keys:tuple):
         output("replica: setup finished")
         self.replicas_public_keys = []
+        self.state_object = object_module.Object
+        self.history = []
 
     def receive(msg= ('replicas_public_keys', replicas_public_keys)):
         self.replicas_public_keys = replicas_public_keys
@@ -18,4 +22,5 @@ class Replica(process):
         output("replica: run finished")
 
 def main():
-    pass
+    replica = new(Replica, [], num=1)
+    start(replica)
