@@ -1,5 +1,5 @@
 replica_module = import_da('replica')
-
+from nacl.public import PrivateKey
 
 class Olympus(process):
     def setup(num_replica, clients):
@@ -8,8 +8,8 @@ class Olympus(process):
 
     def generate_keys():
         """TODO: genererate keys"""
-        key_pair = ("asd","asdas")
-        self.replicas_public_keys.append(key_pair[0])
+        key_pair = PrivateKey.generate()
+        self.replicas_public_keys.append(key_pair.public_key)
         return key_pair
 
     def receive(msg= ('get_config', client)):
@@ -47,5 +47,5 @@ class Olympus(process):
 
 
 def main():
-    olympus = new(Olympus, [ 1 ])
+    olympus = new(Olympus, [ 1, 1 ])
     start(olympus)
