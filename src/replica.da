@@ -1,12 +1,14 @@
-object_module = da.import_da('object')
+from src.object import Object
+
 
 class Replica(process):
 
     def setup(crypto_keys:tuple):
         output("replica: setup finished")
         self.replicas_public_keys = []
-        self.state_object = object_module.Object
+        self.state_object = Object()
         self.history = []
+        self.slot = 0
 
     def receive(msg= ('replicas_public_keys', replicas_public_keys)):
         self.replicas_public_keys = replicas_public_keys
@@ -14,13 +16,18 @@ class Replica(process):
 
     def receive(msg=('request', request_id, request, retransmitted)):
         output("received request with id ", request_id)
+        slot = slot + 1
+        self.state_object.evaluate_request(request)
+        send('done', to=self) # REMOVE ME
 
     def run():
         output("replica: run started")
-        await(received(('done',)))
+        await(received(('done')))
         await(received('request',))
         output("replica: run finished")
 
+
 def main():
-    replica = new(Replica, [], num=1)
+    replica = new(Replica, [''], num=1)
     start(replica)
+    send(('request', 'id1', 'put(\'fruit\',\'apple\')', 0), to=replica)

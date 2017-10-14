@@ -1,3 +1,6 @@
-*.py
 .idea
 *.pyc
+client.py
+bcr.py
+olympus.py
+replica.py
