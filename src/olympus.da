@@ -1,16 +1,18 @@
 replica_module = import_da('replica')
-from nacl.public import PrivateKey
+import nacl.signing
+import nacl.encoding
 
 class Olympus(process):
     def setup(num_replica, clients):
-        self.replicas_public_keys = []
+        self.replicas_public_keys = {}
         self.configuration = []  # current configuration
 
     def generate_keys():
         """TODO: genererate keys"""
-        key_pair = PrivateKey.generate()
-        self.replicas_public_keys.append(key_pair.public_key)
-        return key_pair
+        s_key = nacl.signing.SigningKey.generate()
+        v_key = s_key.verify_key
+        v_key_hex = v_key.encode(encoder=nacl.encoding.HexEncoder)
+        return (s_key,v_key_hex)
 
     def receive(msg= ('get_config', client)):
         send(('config', self.configuration), to=client)
@@ -30,9 +32,13 @@ class Olympus(process):
     def start_replicas():
         """start num_replicas replicas"""
         output("olympus:start_replicas started")
+        itr = 0
         for replica in range(num_replica):
             key_pair = generate_keys()
-            replica = new(replica_module.Replica, [key_pair], num=1)
+            client_id = 'client'+str(itr)
+            itr+=1
+            self.replicas_public_keys[client_id] = key_pair[1]
+            replica = new(replica_module.Replica, [client_id, key_pair], num=1)
             self.configuration.append(replica)
             start(replica)
 
