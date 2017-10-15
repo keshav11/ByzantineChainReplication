@@ -7,11 +7,10 @@ class Client(process):
         self.olympus = None
         self.configuration = None
         self.head = None
-        self.replicas_public_keys = {}
+        pass
 
-    def receive(msg= ('olympus', olympus, replicas_public_keys)):
+    def receive(msg= ('olympus', olympus)):
         self.olympus = olympus
-        self.replicas_public_keys = replicas_public_keys
         send(("olympus_received", self), to=self.olympus)
 
     def receive(msg= ('config', config)):
