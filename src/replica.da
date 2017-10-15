@@ -2,6 +2,7 @@ from src.object import Object
 import nacl.signing
 import nacl.encoding
 import nacl.hash
+import nacl.exceptions
 
 class Replica(process):
 
@@ -18,7 +19,12 @@ class Replica(process):
     def verify(data, client_id):
         v_key = nacl.signing.VerifyKey(self.replicas_public_keys[client_id],
                                        encoder=nacl.encoding.HexEncoder)
-        v_key.verify(data)
+        try:
+            v_key.verify(data)
+        except nacl.exceptions.BadSignatureError:
+            return False
+
+        return True
 
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
@@ -31,14 +37,15 @@ class Replica(process):
         output("received request with id ", request_id)
         slot = slot + 1
         self.state_object.evaluate_request(request)
-        verify(sign(request), client_id) # REMOVE ME VERIFY_EXAMPLE
+        output(verify(b'132123132112322', client_id))  # REMOVE ME VERIFY_EXAMPLE
+        output(verify(sign(request), client_id))  # REMOVE ME VERIFY_EXAMPLE
         output(crypto_hash(request))  # REMOVE ME HASH_EXAMPLE
         send('done', to=self) # REMOVE ME
 
     def run():
         output("replica: run started")
         await(received(('done')))
-        #await(received('request',))
+        await(received('request',))
         output("replica: run finished")
 
 
