@@ -10,16 +10,37 @@ class Object:
     def get(self, key):
         print('In get:', key)
         try:
+            print('GET for key ', key, 'returning val ', self.state[key])
             return self.state[key]
         except KeyError:
             print('error: key does not exist:', key)
 
-    def slice(self, key, value): # TODO
-        # TODO
-        print('In slice:', key, value)
+    def slice(self, key, slice):
+        print('In slice:', key, slice)
+        if key not in self.state.keys():
+            return 'fail'
+        current_val = self.state[key]
+        slice_params = slice.split(':')
+        start = int(slice_params[0])
+        end = int(slice_params[1])
+        step = 1
+        if len(slice_params) == 3:
+            step = int(slice_params[2])
+        try:
+            rval = current_val[start:end:step]
+            if rval == '':
+                return 'fail'
+            self.state[key] = rval
+            print('Updated key ', key, ' val to ', rval, ' after slicing')
+        except Exception as e:
+            print('Exception while slicing: ', e)
+            return 'fail'
 
     def append(self, key, value): # TODO
         print('In append:', key, value)
+        if key not in self.state.keys():
+            return 'fail'
+        self.state[key] += value
 
     def evaluate_request(self, request):
         print('In evaluate_request:', request)
@@ -44,8 +65,11 @@ class Object:
 def main():
     # Testing Object
     o = Object()
-    o.evaluate_request('put(\'fruit\',\'apple\')')
-    o.evaluate_request('get(\'fruit\')')
+    print(o.evaluate_request('put(\'fruit\',\'apple\')'))
+    print(o.evaluate_request('get(\'fruit\')'))
     o.evaluate_request('slice(\'fruit\',\'apple\')')
     o.evaluate_request('append(\'fruit\',\'apple\')')
 
+
+if __name__ == "__main__":
+    main()
