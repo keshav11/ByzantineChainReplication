@@ -26,7 +26,7 @@ class Olympus(process):
     def register_to_clients():
         for client in clients:
             output("sending self to client ", client)
-            send(('olympus', self), to=client)
+            send(('olympus', self, self.replicas_public_keys), to=client)
         await(each(client in clients, has=received(('olympus_received', client))))
 
     def start_replicas():

@@ -3,14 +3,15 @@ import sys
 
 class Client(process):
     def setup(client_id, workload):
+        output("client setup")
         self.olympus = None
         self.configuration = None
         self.head = None
-        output("client setup")
-        pass
+        self.replicas_public_keys = {}
 
-    def receive(msg= ('olympus', olympus)):
+    def receive(msg= ('olympus', olympus, replicas_public_keys)):
         self.olympus = olympus
+        self.replicas_public_keys = replicas_public_keys
         send(("olympus_received", self), to=self.olympus)
 
     def receive(msg= ('config', config)):
