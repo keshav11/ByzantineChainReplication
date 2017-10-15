@@ -1,14 +1,27 @@
 from src.object import Object
-
+import nacl.signing
+import nacl.encoding
+import nacl.hash
 
 class Replica(process):
 
-    def setup(crypto_keys:tuple):
+    def setup(client_id:str, crypto_keys:tuple):
         output("replica: setup finished")
-        self.replicas_public_keys = []
+        self.replicas_public_keys = {}
         self.state_object = Object()
         self.history = []
         self.slot = 0
+
+    def sign(data):
+        return crypto_keys[0].sign(data)
+
+    def verify(data, client_id):
+        v_key = nacl.signing.VerifyKey(self.replicas_public_keys[client_id],
+                                       encoder=nacl.encoding.HexEncoder)
+        v_key.verify(data)
+
+    def crypto_hash(data):
+        return nacl.hash.sha256(data, encoder=nacl.encoding.HexEncoder)
 
     def receive(msg= ('replicas_public_keys', replicas_public_keys)):
         self.replicas_public_keys = replicas_public_keys
@@ -18,6 +31,7 @@ class Replica(process):
         output("received request with id ", request_id)
         slot = slot + 1
         self.state_object.evaluate_request(request)
+        verify(sign(b'asdadss'), client_id) # REMOVE ME
         send('done', to=self) # REMOVE ME
 
     def run():
@@ -28,6 +42,6 @@ class Replica(process):
 
 
 def main():
-    replica = new(Replica, [''], num=1)
+    replica = new(Replica, ['adsa', ''], num=1)
     start(replica)
     send(('request', 'id1', 'put(\'fruit\',\'apple\')', 0), to=replica)
