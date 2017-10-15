@@ -4,7 +4,7 @@ import nacl.encoding
 
 class Olympus(process):
     def setup(num_replica, clients):
-        self.replicas_public_keys = {}
+        self.all_replicas_public_keys = {}
         self.configuration = []  # current configuration
 
     def generate_keys():
@@ -32,19 +32,17 @@ class Olympus(process):
     def start_replicas():
         """start num_replicas replicas"""
         output("olympus:start_replicas started")
-        itr = 0
-        for replica in range(num_replica):
+        for itr in range(num_replica):
             key_pair = generate_keys()
-            client_id = 'client'+str(itr)
-            itr+=1
-            self.replicas_public_keys[client_id] = key_pair[1]
-            replica = new(replica_module.Replica, [client_id, key_pair], num=1)
+            replica_id = 'replica_'+str(itr)
+            self.all_replicas_public_keys[replica_id] = key_pair[1]
+            replica = new(replica_module.Replica, [replica_id, key_pair], num=1)
             self.configuration.append(replica)
             start(replica)
 
         """send public keys to replica"""
         for replica in self.configuration:
-            send(('replicas_public_keys', self.replicas_public_keys), to= replica)
+            send(('all_replicas_public_keys', self.all_replicas_public_keys), to= replica)
             """TODO: remove this"""
             send(('done', ), to=replica)
 
