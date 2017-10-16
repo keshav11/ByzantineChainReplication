@@ -14,6 +14,7 @@ class Object:
             return self.state[key]
         except KeyError:
             print('error: key does not exist:', key)
+            return ''
 
     def slice(self, key, slice):
         print('In slice:', key, slice)
@@ -32,6 +33,7 @@ class Object:
                 return 'fail'
             self.state[key] = rval
             print('Updated key ', key, ' val to ', rval, ' after slicing')
+            return 'OK'
         except Exception as e:
             print('Exception while slicing: ', e)
             return 'fail'
@@ -41,6 +43,7 @@ class Object:
         if key not in self.state.keys():
             return 'fail'
         self.state[key] += value
+        return 'OK'
 
     def evaluate_request(self, request):
         print('In evaluate_request:', request)

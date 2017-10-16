@@ -4,14 +4,18 @@ import nacl.encoding
 import nacl.hash
 import nacl.exceptions
 
+
 class Replica(process):
 
-    def setup(replica_id:str, crypto_keys:tuple):
+    def setup(replica_id:str, position:int, crypto_keys:tuple, clients):
         output("replica: setup finished")
         self.all_replicas_public_keys = {}
         self.state_object = Object()
         self.history = []
         self.slot = 0
+        self.configuration = []
+        self.position = position
+        self.result_cache = {}
 
     def sign(data):
         return crypto_keys[0].sign(data.encode())
@@ -33,14 +37,67 @@ class Replica(process):
         self.all_replicas_public_keys = all_replicas_public_keys
         output("replica: receive all_replicas_public_keys finished")
 
+    def receive(msg=('config', config)):
+        output('receiving config from olympus')
+        self.configuration = config
+
     def receive(msg=('request', request_id, request, retransmitted)):
         output("received request with id ", request_id)
-        slot = slot + 1
-        self.state_object.evaluate_request(request)
-        output(verify(b'132123132112322', replica_id))  # REMOVE ME VERIFY_EXAMPLE
-        output(verify(sign(request), replica_id))  # REMOVE ME VERIFY_EXAMPLE
-        output(crypto_hash(request))  # REMOVE ME HASH_EXAMPLE
+        self.slot += 1
+        # TODO - add conditions like mode is active and all lower numbered slots etc
+        # TODO - sign order statement
+        if len(self.history) < self.slot:
+            order_statement = ('order', self.slot, request)
+        # else:
+        #    return error
+        result = self.state_object.evaluate_request(request)
+        output('result of request ', request, ' is ', result)
+        order_proof = (self.slot, request_id, request, self, self.configuration, [order_statement])
+        output('order proof is ', order_proof)
+        self.history.append(order_proof)
+        # TODO - hash of result and sign the proof
+        result_proof = [('result',request_id, request, crypto_hash(result))]
+        output('result proof is ', result_proof)
+        shuttle = (order_proof, result_proof)
+        output('sending shuttle to ', self.configuration[self.position + 1])
+        send(('shuttle', shuttle), to=self.configuration[self.position + 1])
+        # output(verify(b'132123132112322', replica_id))  # REMOVE ME VERIFY_EXAMPLE
+        # output(verify(sign(request), replica_id))  # REMOVE ME VERIFY_EXAMPLE
+        # output(crypto_hash(request))  # REMOVE ME HASH_EXAMPLE
         send('done', to=self) # REMOVE ME
+
+    def receive(msg=('shuttle', shuttle)):
+        # TODO - do the replicas compare result with predeccessor
+        # TODO - check validity
+        output('received shuttle ', shuttle)
+        self.slot += 1
+        request_id = shuttle[0][1]
+        request = shuttle[0][2]
+        order_statement = ('order', self.slot, request)
+        result = self.state_object.evaluate_request(request)
+        shuttle[0][5].append(order_statement)
+        result_statement = ('result', request_id, request, crypto_hash(result))
+        shuttle[1].append(result_statement)
+        self.history.append(shuttle[0]) # appending order proof to history
+
+        if self.position != len(self.configuration)-1:   # it is not tail replica
+            send(('shuttle', shuttle), to=self.configuration[self.position+1])
+        else:
+            client = clients[request_id.split('_')[0]]
+            send(('result', result, shuttle[1]), to=client)
+            # TODO - is the full shuttle cached or just result proof
+            self.result_cache[request_id] = (result, shuttle[1])
+            if self.position != 0:
+                send(('result_shuttle', result, shuttle), to=self.configuration[self.position-1])
+
+    def receive(msg= ('result_shuttle', result, shuttle)):
+        # TODO - should replica recalculate the result instead of taking tail's result
+        # TODO - is the full shuttle cached or just result proof
+        request_id = shuttle[0][1]
+        self.result_cache[request_id] = (result, shuttle[1])
+        if self.position != 0:
+            send(('result_shuttle', result, shuttle), to=self.configuration[self.position - 1])
+        output('received result shuttle...')
 
     def run():
         output("replica: run started")
