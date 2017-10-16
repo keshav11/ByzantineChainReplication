@@ -1,5 +1,7 @@
 import time
 import sys
+import nacl.hash
+import nacl.exceptions
 
 class Client(process):
     def setup(client_id, workload):
@@ -7,7 +9,8 @@ class Client(process):
         self.olympus = None
         self.configuration = None
         self.head = None
-        pass
+        self.result = None
+        self.result_proof = None
 
     def receive(msg= ('olympus', olympus)):
         self.olympus = olympus
@@ -18,9 +21,30 @@ class Client(process):
         """ TODO config validation"""
         self.head = self.configuration[0]
 
+    def receive(msg= ('result', result, result_proof)):
+        self.result = result
+        self.result_proof = result_proof
+        output('received result ', result)
+
     def fetch_config():
         send(('get_config', self), to=self.olympus)
         await(received(('config',self.configuration)))
+
+    def crypto_hash(data):
+        return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
+
+    def validate(result, result_proof):
+        output('validating result...')
+        result_hash = crypto_hash(result)
+        count = 0
+        for replica_result_proof in result_proof:
+            # TODO check replica signature
+            # TODO do only t+1 replicas need to give same result ?
+            if replica_result_proof[3] == result_hash:
+                count += 1
+        # TODO - need to read t from file or through olympus ?
+        t = (len(result_proof) - 1)/2
+        return count >= (t+1)
 
     def run():
         output("waiting for olympus to contact...")
@@ -32,10 +56,13 @@ class Client(process):
         workload = workload.split(';')
         for i in range(len(workload)):
             request = workload[i].strip()
-            request_id = str(client_id) + '_' + str(i)
+            request_id = client_id + '_' + str(i)
             output("sending request with id ", request_id, " and request workload ", request)
             send(('request', request_id, request, 0), to=self.head)
-            time.sleep(1)
+            await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof))
+
+        # TODO - mechanism to await till all responses received are correct
+        #await(len(received(('result', _, _))) == len(workload))
         output('client run finished!')
 
 

@@ -16,12 +16,13 @@ def main():
 
     print(config)
 
-    clients = []
+    clients = {}
 
     for i in range(config['num_client']):
         client_workload_key = 'workload[' + str(i) + ']'
-        client = new(client_module.Client, [i, config[client_workload_key]], num=1)
-        clients.append(client)
+        client_id = 'client' + str(i)
+        client = new(client_module.Client, [client_id, config[client_workload_key]], num=1)
+        clients[client_id] = client
         start(client)
 
     """ starting olympus """
