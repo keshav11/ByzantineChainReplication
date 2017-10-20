@@ -27,7 +27,7 @@ def main():
         if workload.startswith('pseudorandom'):
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
             workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
-        client = new(client_module.Client, [i, workload], num=1)
+        client = new(client_module.Client, [client_id, workload], num=1)
         clients[client_id] = client
         start(client)
 
