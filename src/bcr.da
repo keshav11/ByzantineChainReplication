@@ -15,7 +15,7 @@ def main():
                     val = val.strip()
                     config[key.strip()] = int(val) if str.isdecimal(val) else val
 
-    print(config)
+    #print(config)
 
     clients = {}
 
@@ -35,9 +35,6 @@ def main():
     num_replicas = 2*config['t']+1
     olympus = new(olympus_module.Olympus, [num_replicas, clients], num=1)
     start(olympus)
-
-    output('node process is terminating')
-
 
 def pseudorandom(seed, n):
     random.seed(seed)

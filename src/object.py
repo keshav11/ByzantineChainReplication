@@ -45,25 +45,32 @@ class Object:
         self.state[key] += value
         return 'OK'
 
+    def print_obj(self):
+        print('printing object after request evaluation...')
+        for key in self.state:
+            print(key, '->', self.state[key])
+
     def evaluate_request(self, request):
         print('In evaluate_request:', request)
         request = request.strip()
         if request.startswith('get'):
             processed_request = request.strip()[4:-1]
-            return self.get(processed_request.strip().strip('\''))
+            return_val = self.get(processed_request.strip().strip('\''))
         elif request.startswith('put'):
             key_val = request.strip()[4:-1].strip().split(',')
-            return self.put(key_val[0].strip().strip('\''),
+            return_val = self.put(key_val[0].strip().strip('\''),
                             key_val[1].strip().strip('\''))
         elif request.startswith('append'):
             key_val = request.strip()[7:-1].strip().split(',')
-            return self.append(key_val[0].strip().strip('\''),
+            return_val = self.append(key_val[0].strip().strip('\''),
                                key_val[1].strip().strip('\''))
         elif request.startswith('slice'):
             key_val = request.strip()[6:-1].strip().split(',')
-            return self.slice(key_val[0].strip().strip('\''),
+            return_val = self.slice(key_val[0].strip().strip('\''),
                               key_val[1].strip().strip('\''))
 
+        self.print_obj()
+        return return_val
 
 def main():
     # Testing Object

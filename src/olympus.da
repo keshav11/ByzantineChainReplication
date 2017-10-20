@@ -20,7 +20,6 @@ class Olympus(process):
     def run():
         """ creating num_replica replicas """
         start_replicas()
-        output("registering to clients...")
         register_to_clients()
 
     def register_to_clients():
@@ -42,6 +41,7 @@ class Olympus(process):
 
         """send public keys to replica"""
         for replica in self.configuration:
+            send(('inithist', []), to=replica)
             send(('all_replicas_public_keys', self.all_replicas_public_keys), to= replica)
             send(('config', self.configuration), to=replica)
             """TODO: remove this"""
