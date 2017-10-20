@@ -4,7 +4,7 @@ import nacl.signing
 import nacl.encoding
 import nacl.hash
 import nacl.exceptions
-
+import ast
 
 class Modes(Enum):
     ACTIVE = 0
@@ -23,18 +23,20 @@ class Replica(process):
         self.configuration = []
         self.position = position
         self.result_cache = {}
+        self.replica_id = replica_id
 
     def sign(data):
-        return crypto_keys[0].sign(data.encode())
+        return crypto_keys[0].sign(str(data).encode())
 
     def verify(data, replica_id):
         v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[replica_id],
                                        encoder=nacl.encoding.HexEncoder)
         try:
-            v_key.verify(data)
+            v_key.verify(data.message,data.signature)
         except nacl.exceptions.BadSignatureError:
             return False
 
+        output('signature verified')
         return True
 
     def crypto_hash(data):
@@ -61,28 +63,30 @@ class Replica(process):
         output("received request with id ", request_id)
         self.slot += 1
         # TODO - add conditions like mode is active and all lower numbered slots etc
-        # TODO - sign order statement
+        output('head sending replica id as ', self.replica_id)
         if len(self.history) < self.slot:
-            order_statement = ('order', self.slot, request)
+            order_statement = ('order', self.slot, request, self.replica_id)
+            signed_order_statement = sign(order_statement) # sign order statement
+
         # else:
         #    return error
         result = self.state_object.evaluate_request(request)
         output('result of request ', request, ' is ', result)
         output('state object at this moment is ')
         print_state_object()
-
-        order_proof = (self.slot, request_id, request, self, self.configuration, [order_statement])
+        order_proof = (self.slot, request_id, request, self, self.configuration,
+                       [signed_order_statement])
         output('order proof is ', order_proof)
         self.history.append(order_proof)
         # TODO - hash of result and sign the proof
-        result_proof = [('result',request_id, request, crypto_hash(result))]
-        output('result proof is ', result_proof)
+        signed_result_proof = [sign(('result', request_id, request, crypto_hash(result)))]
+        output('result proof is ', signed_result_proof)
 
-        shuttle = (order_proof, result_proof)
+        shuttle = (order_proof, signed_result_proof)
         output('sending shuttle to ', self.configuration[self.position + 1])
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
         # output(verify(b'132123132112322', replica_id))  # REMOVE ME VERIFY_EXAMPLE
-        # output(verify(sign(request), replica_id))  # REMOVE ME VERIFY_EXAMPLE
+        #output('EXAMPLE!!!!!!!', verify(sign(request), self.replica_id))  # REMOVE ME VERIFY_EXAMPLE
         # output(crypto_hash(request))  # REMOVE ME HASH_EXAMPLE
         send('done', to=self) # REMOVE ME
 
@@ -90,16 +94,23 @@ class Replica(process):
         # TODO - do the replicas compare result with predeccessor
         # TODO - check validity
         output('received shuttle from ', predeccessor)
+        if not is_order_proof_valid(shuttle[0]):
+            output('order proof invalid...')
+        #else:
+        #    return error
         self.slot += 1
         request_id = shuttle[0][1]
         request = shuttle[0][2]
-        order_statement = ('order', self.slot, request)
+        output('self.replica_id:', self.replica_id, self.position)
+        order_statement = ('order', self.slot, request, self.replica_id)
+        signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
         output('result of request ', request, ' is ', result)
         output('state object at this moment is ')
         print_state_object()
 
-        shuttle[0][5].append(order_statement)
+        shuttle[0][5].append(signed_order_statement)
+
         result_statement = ('result', request_id, request, crypto_hash(result))
         shuttle[1].append(result_statement)
         self.history.append(shuttle[0]) # appending order proof to history
@@ -130,6 +141,20 @@ class Replica(process):
         await(received('request',))
         output("replica: run finished")
 
+    def is_order_proof_valid(order_proof):
+        # order_proof - (self.slot, request_id, request, self, self.configuration,
+        #                   [signed_order_statement])
+        request = order_proof[2]
+        # verify order proof for preceding replicas
+        for ord_stmnt in order_proof[5]:
+            # get replica id from order_statement
+            decoded_message = ast.literal_eval(ord_stmnt.message.decode())
+            r_id = decoded_message[3]
+            request_from_order_statement = decoded_message[2]
+            print(request, request_from_order_statement)
+            if not verify(ord_stmnt, r_id) and request_from_order_statement != request:
+                return False
+        return True
 
 def main():
     replica = new(Replica, ['adsa', ''], num=1)

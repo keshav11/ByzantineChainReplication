@@ -35,6 +35,7 @@ class Olympus(process):
             key_pair = generate_keys()
             replica_id = 'replica'+str(itr)
             self.all_replicas_public_keys[replica_id] = key_pair[1]
+            output('Olympus sending replica id as ', replica_id)
             replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients], num=1)
             self.configuration.append(replica)
             start(replica)
