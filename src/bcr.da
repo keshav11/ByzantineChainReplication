@@ -1,4 +1,5 @@
 import os
+import random
 olympus_module = import_da('olympus')
 client_module = import_da('client')
 
@@ -20,8 +21,13 @@ def main():
 
     for i in range(config['num_client']):
         client_workload_key = 'workload[' + str(i) + ']'
+        workload = config[client_workload_key]
         client_id = 'client' + str(i)
-        client = new(client_module.Client, [client_id, config[client_workload_key]], num=1)
+        # if workload is pseudorandom genererate workload
+        if workload.startswith('pseudorandom'):
+            pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
+            workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
+        client = new(client_module.Client, [i, workload], num=1)
         clients[client_id] = client
         start(client)
 
@@ -30,6 +36,33 @@ def main():
     olympus = new(olympus_module.Olympus, [num_replicas, clients], num=1)
     start(olympus)
 
-
-
     output('node process is terminating')
+
+
+def pseudorandom(seed, n):
+    random.seed(seed)
+    pseudorandom_workload = ''
+    operations = ['get', 'put', 'slice', 'append']
+    for i in range(n):
+        curr_operation = operations[random.randint(1, 4)-1]
+        if curr_operation == 'get':
+            key = str(random.randint(1, 255))
+            curr_operation += '('+key+')'
+        elif curr_operation == 'put':
+            key = str(random.randint(1, 255))
+            value = str(random.randint(1, 255))
+            curr_operation += '(' +key+ ','+value+ ')'
+        elif curr_operation == 'slice':
+            key = str(random.randint(1, 10))
+            value = str(random.randint(1, 255)) + ':' + str(random.randint(1, 255))
+            curr_operation += '(' + key + ',' + value + ')'
+        elif curr_operation == 'append':
+            key = str(random.randint(1, 255))
+            value = str(random.randint(1, 255))
+            curr_operation += '(' + key + ',' + value + ')'
+
+        pseudorandom_workload += curr_operation
+        if i != n:
+            pseudorandom_workload += '; '
+
+    return pseudorandom_workload
