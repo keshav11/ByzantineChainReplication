@@ -1,8 +1,9 @@
 import os
 import random
+config(channel is reliable)
+# TODO: configure clock??
 olympus_module = import_da('olympus')
 client_module = import_da('client')
-
 
 def main():
     config_file = 'config1.txt'
