@@ -134,9 +134,9 @@ class Replica(process):
             #output('sending shuttle to ', self.configuration[self.position+1])
             send(('shuttle', shuttle), to=self.configuration[self.position+1])
         else:
-            output('tail will send result to client...')
+            output('tail will send result to client for request id ', request_id, '...')
             client = clients[request_id.split('_')[0]]
-            send(('result', result, shuttle[1]), to=client)
+            send(('result', result, shuttle[1], request_id), to=client)
             # TODO - is the full shuttle cached or just result proof
             self.result_cache[request_id] = (result, shuttle[1])
             if self.position != 0:
