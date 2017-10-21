@@ -80,4 +80,4 @@ def pseudorandom(seed, n):
         if i != n:
             pseudorandom_workload += '; '
 
-    return pseudorandom_workload
+    return pseudorandom_workload.strip()
