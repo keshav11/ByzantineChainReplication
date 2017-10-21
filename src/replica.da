@@ -103,14 +103,6 @@ class Replica(process):
                         output('Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1])
         return True
 
-    def receive(msg=('request', request_id, request, retransmitted)):
-
-        output("received request with id ", request_id)
-        client_no = int(request_id.split('_')[0].strip('client'))
-        self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
-
-        check_failure_scenario(request_id, request)
-
     def handle_new_request(request_id, request_id, request):
         output("new request", request_id, level=20)
         self.slot += 1
@@ -137,17 +129,20 @@ class Replica(process):
         # TODO - hash of result and sign the proof
         signed_result_proof = [sign(('result', request_id, request, crypto_hash(result)))]
         shuttle = (order_proof, signed_result_proof)
+        client_no = int(request_id.split('_')[0].strip('client'))
         # special case - head does not receive shuttle but we do +1 to maintain consistency
         self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
         output('sending shuttle to ', self.configuration[self.position + 1])
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
 
     def receive(msg=('request', request_id, request, retransmitted)):
-        output("received request with id ", request_id)
+        output("received request with id ", request_id, " retransmitted ", retransmitted, level=20)
         if not retransmitted:
+            client_no = int(request_id.split('_')[0].strip('client'))
+            self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
+            check_failure_scenario(request_id, request)
             handle_new_request(request_id, request)
         else: # retransmitted request
-            output("retransmitted request received...", level= 20)
             if is_correct(self) and request_id in self.result_cache:
                 output('result already in cache. send result to client', level= 20)
                 client = clients[request_id.split('_')[0]]
