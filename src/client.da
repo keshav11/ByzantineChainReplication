@@ -4,7 +4,7 @@ import nacl.hash
 import nacl.exceptions
 
 class Client(process):
-    def setup(client_id, workload):
+    def setup(client_id, workload, timeout):
         output("client setup")
         self.olympus = None
         self.configuration = None
@@ -13,7 +13,7 @@ class Client(process):
         self.tail = None
         self.result = None
         self.result_proof = None
-        self.TIMER_DURATION = 5
+        self.TIMER_DURATION = timeout
 
     def receive(msg= ('olympus', olympus)):
         self.olympus = olympus
@@ -84,6 +84,8 @@ class Client(process):
 
             # TODO - mechanism to await till all responses received are correct
             # await(len(received(('result', _, _))) == len(workload))
+
+        await(received(('done')))
         output('client run finished!')
 
     def send_request(request_id, request, is_retrasmitted, recipient):
