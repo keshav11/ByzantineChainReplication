@@ -21,6 +21,9 @@ class Olympus(process):
         """ creating num_replica replicas """
         start_replicas()
         register_to_clients()
+        # wait till done not received
+        await(received(('done')))
+        output('olympus run finished!')
 
     def register_to_clients():
         for client in clients.values():

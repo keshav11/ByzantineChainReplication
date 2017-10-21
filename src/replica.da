@@ -59,15 +59,27 @@ class Replica(process):
         output('receiving config from olympus')
         self.configuration = config
 
+    def lower_numbered_slots_present(slot):
+        i = 1
+        for op in self.history:
+            if op[0] != i:
+                return False
+            i+=1
+        return True
+
     def receive(msg=('request', request_id, request, retransmitted)):
         output("received request with id ", request_id)
         self.slot += 1
+        if not lower_numbered_slots_present(slot):
+            # holes in history present
+            output('slots missing in history..')
+            # TODO: send reconfig-request
+
         # TODO - add conditions like mode is active and all lower numbered slots etc
         output('head sending replica id as ', self.replica_id)
         if len(self.history) < self.slot:
             order_statement = ('order', self.slot, request, self.replica_id)
             signed_order_statement = sign(order_statement) # sign order statement
-
         # else:
         #    return error
         result = self.state_object.evaluate_request(request)
@@ -96,12 +108,15 @@ class Replica(process):
         output('received shuttle from ', predeccessor)
         if not is_order_proof_valid(shuttle[0]):
             output('order proof invalid...')
-        #else:
-        #    return error
-        self.slot += 1
+            # TODO: send reconfig-request
+
+        if not lower_numbered_slots_present(slot):
+            # holes in history present
+            output('slots missing in history..')
+            # TODO: send reconfig-request
+        self.slot += shuttle[0][0] # get slot from shuttle
         request_id = shuttle[0][1]
         request = shuttle[0][2]
-        output('self.replica_id:', self.replica_id, self.position)
         order_statement = ('order', self.slot, request, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
@@ -151,7 +166,6 @@ class Replica(process):
             decoded_message = ast.literal_eval(ord_stmnt.message.decode())
             r_id = decoded_message[3]
             request_from_order_statement = decoded_message[2]
-            print(request, request_from_order_statement)
             if not verify(ord_stmnt, r_id) and request_from_order_statement != request:
                 return False
         return True
