@@ -1,3 +1,5 @@
+# py -m da -f --logfilename logs\lf2 src\bcr.da
+
 import os
 import random
 config(channel is reliable)

@@ -62,7 +62,6 @@ class Client(process):
         for i in range(len(workload)):
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
-            output("sending request with id ", request_id, " and request workload ", request, " !!!!!")
             send_request(request_id, request, 0, self.head)
             output('waiting for result of request id', request_id)
             if await(some(received(('result', _, _, r_id)), has= r_id==request_id)):
@@ -86,8 +85,8 @@ class Client(process):
             # TODO - mechanism to await till all responses received are correct
             # await(len(received(('result', _, _))) == len(workload))
 
-            await(received(('done')))
-            output('client run finished!')
+        await(received(('done')))
+        output('client run finished!')
 
     def send_request(request_id, request, is_retrasmitted, recipient):
         output("sending request with id ", request_id, " and request workload ", request)
