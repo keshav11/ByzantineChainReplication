@@ -28,13 +28,14 @@ def main():
         if workload.startswith('pseudorandom'):
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
             workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
-        client = new(client_module.Client, [client_id, workload], num=1)
+        client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000], num=1)
         clients[client_id] = client
         start(client)
 
     """ starting olympus """
     num_replicas = 2*config['t']+1
-    olympus = new(olympus_module.Olympus, [num_replicas, clients], num=1)
+    olympus = new(olympus_module.Olympus, [num_replicas, clients,
+                    int(config['head_timeout'])/1000, int(config['nonhead_timeout'])/1000], num=1)
     start(olympus)
 
 def pseudorandom(seed, n):
