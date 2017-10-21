@@ -28,10 +28,10 @@ class Olympus(process):
 
     def register_to_clients():
         for client in clients.values():
-            output("sending self to client ", client)
+            output("sending self and public_keys to client ", client)
+            send(('all_replicas_public_keys', self.all_replicas_public_keys), to=client)
             send(('olympus', self), to=client)
         await(each(client in clients.values(), has=received(('olympus_received', client))))
-
 
     def start_replicas():
         """start num_replicas replicas"""

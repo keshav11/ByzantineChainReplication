@@ -5,6 +5,7 @@ import nacl.exceptions
 
 class Client(process):
     def setup(client_id, workload, timeout):
+        self.all_replicas_public_keys = {}
         output("client setup")
         self.olympus = None
         self.configuration = None
@@ -31,6 +32,10 @@ class Client(process):
         self.result_proof = result_proof
         output('received result for request id', request_id, result)
 
+    def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
+        self.all_replicas_public_keys = all_replicas_public_keys
+        output("client: receive all_replicas_public_keys finished")
+
     def fetch_config():
         send(('get_config', self), to=self.olympus)
         await(received(('config',self.configuration, self.configuration_number)))
@@ -38,12 +43,28 @@ class Client(process):
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
 
+    def sign(data):
+        return crypto_keys[0].sign(str(data).encode())
+
+    def verify(data, replica_id):
+        v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[replica_id],
+                                       encoder=nacl.encoding.HexEncoder)
+        try:
+            v_key.verify(data.message, data.signature)
+        except nacl.exceptions.BadSignatureError:
+            return False
+
+        output('signature verified')
+        return True
+
     def validate(result, result_proof):
         output('validating result...')
         result_hash = crypto_hash(result)
         count = 0
         for replica_result_proof in result_proof:
             # TODO check replica signature
+            # signed_result_proof = [sign(('result', request_id, request, crypto_hash(result)))]
+
             # TODO do only t+1 replicas need to give same result ?
             if replica_result_proof[3] == result_hash:
                 count += 1
