@@ -154,13 +154,13 @@ class Replica(process):
 
     def is_history_valid(hist):
         if len(hist) == 0: return True
-        order_proof = hist[0]
-        request = order_proof[2]
-        for ord_stmnt in order_proof[5]:
-            decoded_message = ast.literal_eval(ord_stmnt.message.decode())
-            request_from_order_statement = decoded_message[2]
-            if request_from_order_statement != request:
-                return False
+        for order_proof in hist:
+            request = order_proof[2]
+            for ord_stmnt in order_proof[5]:
+                decoded_message = ast.literal_eval(ord_stmnt.message.decode())
+                request_from_order_statement = decoded_message[2]
+                if request_from_order_statement != request:
+                    return False
         return True
 
     def receive(msg=('shuttle', shuttle), from_=predeccessor):
