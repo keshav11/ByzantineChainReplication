@@ -3,7 +3,7 @@ import nacl.signing
 import nacl.encoding
 
 class Olympus(process):
-    def setup(num_replica, clients, failure_scenarios):
+    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout):
         self.all_replicas_public_keys = {}
         self.configuration = []  # current configuration
         self.configuration_number = 0
@@ -32,6 +32,7 @@ class Olympus(process):
             send(('olympus', self), to=client)
         await(each(client in clients.values(), has=received(('olympus_received', client))))
 
+
     def start_replicas():
         """start num_replicas replicas"""
         output("olympus:start_replicas started")
@@ -40,15 +41,20 @@ class Olympus(process):
             replica_id = 'replica'+str(itr)
             self.all_replicas_public_keys[replica_id] = key_pair[1]
             output('Olympus sending replica id as ', replica_id)
-            replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients, failure_scenarios.get(itr)], num=1)
+            if itr == 0:
+                timeout = self.head_timeout
+            else:
+                timeout = self.nonhead_timeout
+            replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients, failure_scenarios.get(itr), timeout], num=1)
             self.configuration.append(replica)
             start(replica)
 
-        """send public keys to replica"""
+        """send public keys and config to replica"""
         for replica in self.configuration:
             send(('inithist', []), to=replica)
             send(('all_replicas_public_keys', self.all_replicas_public_keys), to= replica)
             send(('config', self.configuration, self.configuration_number), to=replica)
+            send(('olympus', self), to=replica)
             """TODO: remove this"""
             send(('done', ), to=replica)
 
