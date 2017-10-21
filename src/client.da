@@ -8,7 +8,9 @@ class Client(process):
         output("client setup")
         self.olympus = None
         self.configuration = None
+        self.configuration_number = -1
         self.head = None
+        self.tail = None
         self.result = None
         self.result_proof = None
         self.TIMER_DURATION = timeout
@@ -17,19 +19,21 @@ class Client(process):
         self.olympus = olympus
         send(("olympus_received", self), to=self.olympus)
 
-    def receive(msg= ('config', config)):
+    def receive(msg= ('config', config, config_no)):
         self.configuration = config
+        self.configuration_number = config_no
         """ TODO config validation"""
         self.head = self.configuration[0]
+        self.tail = self.configuration[-1]
 
-    def receive(msg= ('result', result, result_proof)):
+    def receive(msg= ('result', result, result_proof, request_id)):
         self.result = result
         self.result_proof = result_proof
-        output('received result ', result)
+        output('received result for request id', request_id, result)
 
     def fetch_config():
         send(('get_config', self), to=self.olympus)
-        await(received(('config',self.configuration)))
+        await(received(('config',self.configuration, self.configuration_number)))
 
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
@@ -58,15 +62,26 @@ class Client(process):
         for i in range(len(workload)):
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
-            output("sending request with id ", request_id, " and request workload ", request)
+            output("sending request with id ", request_id, " and request workload ", request, " !!!!!")
             send_request(request_id, request, 0, self.head)
-            if await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof)):
+            output('waiting for result of request id', request_id)
+            if await(some(received(('result', _, _, r_id)), has= r_id==request_id)):
+                output('await se nikal liya !!!!!')
                 pass
+            # if await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof)):
+            #     output('await se nikal liya !!!!!')
+            #     pass
             elif timeout(self.TIMER_DURATION):
                 output('timeout occurred for message request_id', request_id)
                 fetch_config()
                 for replica in self.configuration:
                     send_request(request_id, request, 1, replica)
+
+            #await(len(listof(self.tail, received(('result', _, _), from_=self.tail))) == i+1)
+            #await(len(some(received(('result', _, _)))) == i+1)
+            #await(setof(a, received(('result', _, a)), request in a[0]))
+            #await(each(req in range(i+1), has= some(received(('result', _, _)))))
+            #await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof))
 
             # TODO - mechanism to await till all responses received are correct
             # await(len(received(('result', _, _))) == len(workload))

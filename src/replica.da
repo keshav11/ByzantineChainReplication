@@ -14,7 +14,7 @@ class Modes(Enum):
 
 class Replica(process):
 
-    def setup(replica_id:str, position:int, crypto_keys:tuple, clients, timeout):
+    def setup(replica_id:str, position:int, crypto_keys:tuple, clients, failure_scenarios, timeout):
         self.all_replicas_public_keys = {}
         self.state_object = Object()
         self.history = []
@@ -22,6 +22,7 @@ class Replica(process):
         self.mode = Modes.PENDING
         self.slot = 0
         self.configuration = []
+        self.configuration_number = -1
         self.position = position
         self.result_cache = {}
         self.replica_id = replica_id
@@ -61,9 +62,10 @@ class Replica(process):
         self.history = history
         self.mode = Modes.ACTIVE
 
-    def receive(msg=('config', config)):
+    def receive(msg=('config', config, config_no)):
         output('receiving config from olympus')
         self.configuration = config
+        self.configuration_number = config_no
 
     def lower_numbered_slots_present(slt):
         slot_itr = 1
@@ -195,9 +197,9 @@ class Replica(process):
             #output('sending shuttle to ', self.configuration[self.position+1])
             send(('shuttle', shuttle), to=self.configuration[self.position+1])
         else:
-            output('tail will send result to client...', level= 20)
+            output('tail will send result to client for request id ', request_id, '...', level=20)
             client = clients[request_id.split('_')[0]]
-            send(('result', result, shuttle[1]), to=client)
+            send(('result', result, shuttle[1], request_id), to=client)
             # TODO - is the full shuttle cached or just result proof
             self.result_cache[request_id] = (result, shuttle[1])
             if self.position != 0:
