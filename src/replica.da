@@ -114,7 +114,7 @@ class Replica(process):
             # holes in history present
             output('slots missing in history..')
             # TODO: send reconfig-request
-        self.slot += shuttle[0][0] # get slot from shuttle
+        self.slot = shuttle[0][0] # get slot from shuttle
         request_id = shuttle[0][1]
         request = shuttle[0][2]
         order_statement = ('order', self.slot, request, self.replica_id)
@@ -164,9 +164,9 @@ class Replica(process):
         for ord_stmnt in order_proof[5]:
             # get replica id from order_statement
             decoded_message = ast.literal_eval(ord_stmnt.message.decode())
-            r_id = decoded_message[3]
+            rplca_id = decoded_message[3]
             request_from_order_statement = decoded_message[2]
-            if not verify(ord_stmnt, r_id) and request_from_order_statement != request:
+            if not verify(ord_stmnt, rplca_id) and request_from_order_statement != request:
                 return False
         return True
 
