@@ -6,6 +6,14 @@ import nacl.hash
 import nacl.exceptions
 import ast
 
+
+class Failure_Scenarios(Enum):
+    CLIENT_REQUEST = "client_request"
+    FORWARDED_REQUEST = "forwarded_request"
+    SHUTTLE = "shuttle"
+    RESULT_SHUTTLE = "result_shuttle"
+
+
 class Modes(Enum):
     ACTIVE = 0
     PENDING = 1
@@ -25,6 +33,12 @@ class Replica(process):
         self.position = position
         self.result_cache = {}
         self.replica_id = replica_id
+        self.client_requests_tracker = [{
+            Failure_Scenarios.CLIENT_REQUEST: 0,
+            Failure_Scenarios.FORWARDED_REQUEST: 0,
+            Failure_Scenarios.SHUTTLE: 0,
+            Failure_Scenarios.RESULT_SHUTTLE: 0
+        } for _ in range(len(clients))]
 
     def sign(data):
         return crypto_keys[0].sign(str(data).encode())
@@ -69,8 +83,30 @@ class Replica(process):
             i+=1
         return True
 
+    result_shuttle(0, 1), drop();shuttle(1, 3), omit_send()
+
+    def check_failure_scenario(request_id, request):
+        client_no = int(request_id.split('_')[0].strip('client'))
+        if failure_scenarios.get(self.configuration_number):
+            scenarios = failure_scenarios[self.configuration_number].split(';')
+            output('scenarios are ', scenarios)
+            for probable_fail_scen in self.client_requests_tracker[client_no]:
+                m = self.client_requests_tracker[client_no][probable_fail_scen]
+                search_str = '(' + str(client_no) + ',' + str(m) + '),'
+                output('search str is ', search_str)
+                for scenario in scenarios:
+                    if search_str in scenario:
+                        output('MILA BC !!!!', probable_fail_scen, search_str, scenario.split(search_str)[1])
+        return True
+
     def receive(msg=('request', request_id, request, retransmitted)):
+
         output("received request with id ", request_id)
+        client_no = int(request_id.split('_')[0].strip('client'))
+        self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
+
+        check_failure_scenario(request_id, request)
+
         self.slot += 1
         if not lower_numbered_slots_present(slot):
             # holes in history present
@@ -97,6 +133,8 @@ class Replica(process):
         output('result proof is ', signed_result_proof)
 
         shuttle = (order_proof, signed_result_proof)
+        # special case - head does not receive shuttle but we do +1 to maintain consistency
+        self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
         output('sending shuttle to ', self.configuration[self.position + 1])
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
         # output(verify(b'132123132112322', replica_id))  # REMOVE ME VERIFY_EXAMPLE
@@ -108,6 +146,12 @@ class Replica(process):
         # TODO - do the replicas compare result with predeccessor
         # TODO - check validity
         output('received shuttle from ', predeccessor)
+        self.slot = shuttle[0][0]  # get slot from shuttle
+        request_id = shuttle[0][1]
+        request = shuttle[0][2]
+
+        client_no = int(request_id.split('_')[0].strip('client'))
+        self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
         if not is_order_proof_valid(shuttle[0]):
             output('order proof invalid...')
             # TODO: send reconfig-request
@@ -116,9 +160,7 @@ class Replica(process):
             # holes in history present
             output('slots missing in history..')
             # TODO: send reconfig-request
-        self.slot = shuttle[0][0] # get slot from shuttle
-        request_id = shuttle[0][1]
-        request = shuttle[0][2]
+
         order_statement = ('order', self.slot, request, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
@@ -138,6 +180,9 @@ class Replica(process):
         else:
             output('tail will send result to client for request id ', request_id, '...')
             client = clients[request_id.split('_')[0]]
+            client_no = int(request_id.split('_')[0].strip('client'))
+            # special case - tail does not receive result shuttle but we do +1 to maintain consistency
+            self.client_requests_tracker[client_no][Failure_Scenarios.RESULT_SHUTTLE] += 1
             send(('result', result, shuttle[1], request_id), to=client)
             # TODO - is the full shuttle cached or just result proof
             self.result_cache[request_id] = (result, shuttle[1])
@@ -148,6 +193,8 @@ class Replica(process):
         # TODO - should replica recalculate the result instead of taking tail's result
         # TODO - is the full shuttle cached or just result proof
         request_id = shuttle[0][1]
+        client_no = int(request_id.split('_')[0].strip('client'))
+        self.client_requests_tracker[client_no][Failure_Scenarios.RESULT_SHUTTLE] += 1
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
             send(('result_shuttle', result, shuttle), to=self.configuration[self.position - 1])
