@@ -14,13 +14,14 @@ class Modes(Enum):
 
 class Replica(process):
 
-    def setup(replica_id:str, position:int, crypto_keys:tuple, clients):
+    def setup(replica_id:str, position:int, crypto_keys:tuple, clients, failure_scenarios):
         self.all_replicas_public_keys = {}
         self.state_object = Object()
         self.history = []
         self.mode = Modes.PENDING
         self.slot = 0
         self.configuration = []
+        self.configuration_number = -1
         self.position = position
         self.result_cache = {}
         self.replica_id = replica_id
@@ -55,9 +56,10 @@ class Replica(process):
         self.history = history
         self.mode = Modes.ACTIVE
 
-    def receive(msg=('config', config)):
+    def receive(msg=('config', config, config_no)):
         output('receiving config from olympus')
         self.configuration = config
+        self.configuration_number = config_no
 
     def lower_numbered_slots_present(slot):
         i = 1

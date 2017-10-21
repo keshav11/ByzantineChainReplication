@@ -8,6 +8,7 @@ class Client(process):
         output("client setup")
         self.olympus = None
         self.configuration = None
+        self.configuration_number = -1
         self.head = None
         self.tail = None
         self.result = None
@@ -18,8 +19,9 @@ class Client(process):
         self.olympus = olympus
         send(("olympus_received", self), to=self.olympus)
 
-    def receive(msg= ('config', config)):
+    def receive(msg= ('config', config, config_no)):
         self.configuration = config
+        self.configuration_number = config_no
         """ TODO config validation"""
         self.head = self.configuration[0]
         self.tail = self.configuration[-1]
@@ -31,7 +33,7 @@ class Client(process):
 
     def fetch_config():
         send(('get_config', self), to=self.olympus)
-        await(received(('config',self.configuration)))
+        await(received(('config',self.configuration, self.configuration_number)))
 
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)

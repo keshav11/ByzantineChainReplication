@@ -18,6 +18,20 @@ def main():
 
     #print(config)
 
+    # parsing failure scenarios for each replica and putting in data structure
+    failure_scenarios = {}
+    for key in config:
+        if key.startswith('failures'):
+            conf,replica = key.strip('failures[]').split(',')
+            conf,replica = int(conf), int(replica)
+            if replica in failure_scenarios.keys():
+                failure_scenarios[replica][conf] = config[key]
+            else:
+                failure_scenarios[replica] = {
+                    conf: config[key]
+                }
+
+    print(failure_scenarios)
     clients = {}
 
     for i in range(config['num_client']):
@@ -34,7 +48,7 @@ def main():
 
     """ starting olympus """
     num_replicas = 2*config['t']+1
-    olympus = new(olympus_module.Olympus, [num_replicas, clients], num=1)
+    olympus = new(olympus_module.Olympus, [num_replicas, clients, failure_scenarios], num=1)
     start(olympus)
 
 def pseudorandom(seed, n):

@@ -3,9 +3,10 @@ import nacl.signing
 import nacl.encoding
 
 class Olympus(process):
-    def setup(num_replica, clients):
+    def setup(num_replica, clients, failure_scenarios):
         self.all_replicas_public_keys = {}
         self.configuration = []  # current configuration
+        self.configuration_number = 0
 
     def generate_keys():
         """TODO: genererate keys"""
@@ -15,7 +16,7 @@ class Olympus(process):
         return (s_key,v_key_hex)
 
     def receive(msg= ('get_config', client)):
-        send(('config', self.configuration), to=client)
+        send(('config', self.configuration, self.configuration_number), to=client)
 
     def run():
         """ creating num_replica replicas """
@@ -39,7 +40,7 @@ class Olympus(process):
             replica_id = 'replica'+str(itr)
             self.all_replicas_public_keys[replica_id] = key_pair[1]
             output('Olympus sending replica id as ', replica_id)
-            replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients], num=1)
+            replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients, failure_scenarios.get(itr)], num=1)
             self.configuration.append(replica)
             start(replica)
 
@@ -47,7 +48,7 @@ class Olympus(process):
         for replica in self.configuration:
             send(('inithist', []), to=replica)
             send(('all_replicas_public_keys', self.all_replicas_public_keys), to= replica)
-            send(('config', self.configuration), to=replica)
+            send(('config', self.configuration, self.configuration_number), to=replica)
             """TODO: remove this"""
             send(('done', ), to=replica)
 
