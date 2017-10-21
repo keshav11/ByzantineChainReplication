@@ -45,10 +45,6 @@ class Replica(process):
     def sign(data):
         return crypto_keys[0].sign(str(data).encode())
 
-    def receive(msg= ('olympus', olympus)):
-        self.olympus = olympus
-        output('olympus received in client-', self.olympus)
-
     def verify(data, replica_id):
         v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[replica_id],
                                        encoder=nacl.encoding.HexEncoder)
@@ -71,10 +67,11 @@ class Replica(process):
         self.all_replicas_public_keys = all_replicas_public_keys
         output("replica: receive all_replicas_public_keys finished")
 
-    def receive(msg=('inithist', history)):
+    def receive(msg=('inithist', history), from_=olympus):
         output('receive handler for inithist')
         self.history = history
         self.mode = Modes.ACTIVE
+        self.olympus = olympus
 
     def receive(msg=('config', config, config_no)):
         output('receiving config from olympus')
