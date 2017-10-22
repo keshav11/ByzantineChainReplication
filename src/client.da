@@ -24,6 +24,7 @@ class Client(process):
         self.test_case = test_case
         self.result_count = 0
         self.result_recd_from_replica = ''
+        self.olympus_pub_key = ''
 
     def receive(msg= ('cypto_keys', crypto_keys)):
         self.crypto_keys = crypto_keys
@@ -61,9 +62,10 @@ class Client(process):
         self.result_recd_from_replica = result
         output('received result for request id', request_id, result)
 
-    def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
+    def receive(msg= ('all_public_keys', all_replicas_public_keys, olympus_pub_key)):
         self.all_replicas_public_keys = all_replicas_public_keys
-        output("client: receive all_replicas_public_keys finished")
+        self.olympus_pub_key = olympus_pub_key
+        output("client: receive all_public_keys finished")
 
     def fetch_config():
         send(('get_config', self), to=self.olympus)

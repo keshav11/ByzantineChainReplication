@@ -23,7 +23,8 @@ class Modes(Enum):
 
 class Replica(process):
 
-    def setup(replica_id:str, position:int, crypto_keys:tuple, clients, failure_scenarios, timeout):
+    def setup(replica_id:str, position:int, crypto_keys:tuple,
+              clients, failure_scenarios, timeout, olympus_pub_key):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.state_object = Object()
@@ -55,13 +56,16 @@ class Replica(process):
         self.all_clients_public_keys = all_clients_public_keys
         output('all_clients_public_keys received in client')
 
-    def verify(data, id, type="replica"):
+    def verify(data, id=None, type="replica"):
         if type == "replica":
             v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[id],
                                    encoder=nacl.encoding.HexEncoder)
-        else:
+        elif type == 'client':
             v_key = nacl.signing.VerifyKey(self.all_clients_public_keys[id],
                                    encoder=nacl.encoding.HexEncoder)
+        else:
+            v_key = nacl.signing.VerifyKey(self.olympus_pub_key,
+                                           encoder=nacl.encoding.HexEncoder)
         try:
             v_key.verify(data.message,data.signature)
         except nacl.exceptions.BadSignatureError:
@@ -78,12 +82,27 @@ class Replica(process):
             print(key, '->', self.state_object.state[key])
 
     def receive(msg=('all_replicas_public_keys', all_replicas_public_keys)):
-        self.all_replicas_public_keys = all_replicas_public_keys
+        decoded_req = ast.literal_eval(all_replicas_public_keys.message.decode())
+        if not verify(all_replicas_public_keys, type="olympus"):
+            output('signature verification failed for '
+                   'all_replicas_public_keys from olympus', level= logging.ERROR)
+            return
+        else:
+            output('signature verification successful for '
+                   'all_replicas_public_keys from olympus', level= logging.INFO)
+        self.all_replicas_public_keys = decoded_req
+        output('!!!!!!!',self.all_replicas_public_keys)
         output("replica: receive all_replicas_public_keys finished")
 
     def receive(msg=('inithist', history), from_=olympus):
         output('receive handler for inithist')
-        self.history = history
+        decoded_req = ast.literal_eval(history.message.decode())
+        if not verify(history, type="olympus"):
+            output('signature verification failed for inithist from olympus', level= logging.ERROR)
+            return
+        else:
+            output('signature verification successful for inithist from olympus', level= logging.INFO)
+        self.history = decoded_req
         self.mode = Modes.ACTIVE
         self.olympus = olympus
 
@@ -91,6 +110,7 @@ class Replica(process):
         output('receiving config from olympus')
         self.configuration = config
         self.configuration_number = config_no
+
 
     def lower_numbered_slots_present(slt):
         slot_itr = 1
