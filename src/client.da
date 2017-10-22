@@ -1,3 +1,4 @@
+from src.object import Object
 import time
 import sys
 import logging
@@ -7,9 +8,8 @@ import nacl.hash
 import nacl.exceptions
 import ast
 
-
 class Client(process):
-    def setup(client_id, workload, timeout):
+    def setup(client_id, workload, timeout, test_case):
         self.all_replicas_public_keys = {}
         output("client setup")
         self.olympus = None
@@ -19,6 +19,9 @@ class Client(process):
         self.tail = None
         self.TIMER_DURATION = timeout
         self.crypto_keys = None
+        self.state_object = Object()
+        self.last_result = ''
+        self.test_case = test_case
 
     def receive(msg= ('cypto_keys', crypto_keys)):
         self.crypto_keys = crypto_keys
@@ -40,6 +43,15 @@ class Client(process):
             output('client: result proof validation failed.'
                    ' send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
+        # matching result from client and result computed at client
+        if self.test_case == 'verify_result_single_client':
+            if result == self.last_result:
+                output('result from replica match with result computed at client. result received from replica-',
+                       result, 'result computed-', self.last_result, level= logging.INFO)
+            else:
+                output('result from replica match with result computed at client. result received from replica-',
+                       result, 'result computed-', self.last_result, level= logging.INFO)
+
         output('received result for request id', request_id, result)
 
     def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
@@ -98,13 +110,10 @@ class Client(process):
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
             send_request(request_id, request, 0, self.head)
+            self.last_result = self.state_object.evaluate_request(request)
             output('waiting for result of request id', request_id)
             if await(some(received(('result', _, _, r_id)), has= r_id==request_id)):
-                output('await se nikal liya !!!!!')
-                pass
-            # if await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof)):
-            #     output('await se nikal liya !!!!!')
-            #     pass
+                output('result received for request_id', request_id)
             elif timeout(self.TIMER_DURATION):
                 output('timeout occurred for message request_id', request_id)
                 fetch_config()
@@ -125,7 +134,6 @@ class Client(process):
         output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
         signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
         send(('request', signed_request), to=recipient)
-
 
 def main():
     pass

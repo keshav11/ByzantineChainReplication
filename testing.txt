@@ -1,2 +1,18 @@
 python -m da --logfile --logfilename logs\log.txt -F info --message-buffer-size 100000  src\bcr.da config1.txt
-python -m da --logfile --logfilename logs\log.txt -F info --message-buffer-size 100000  src\bcr.da config_client_timeout.txt
+a file named testing.txt with an entry for each test case.
+each entry should include:
+(1) brief description of the scenario (i.e., the client requests, failure scenario, etc.),
+(2) the name of the configuration file used to run the test case, [2017-10-16] revised next item]
+(3) other information (if any) needed to run the test case, including the commands(s) used to run it (or the name of a shell script containing those commands) and any requirements such as that certain files should contain certain content,
+(4) the name of the log file produced by running the test case, [2017-10-14 added next item],
+(5) description of the programmatic check of correctness of content of dictionary (if any),
+(6) the outcome (pass or fail), with a brief explanation of the problem in case of failure.
+
+Test case 1: verify_result_single_client
+(1) only one client having workload = put('movie','star'); append('movie',' wars'); get('movie')
+(2) configuration file- config_result_verify_testcase.txt
+(3) python -m da --logfile --logfilename logs\log_verify_result_single_client.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_testcase.txt
+(4) log file- logs\log_verify_result_single_client.txt
+(5) a dictionary is maintained at client. The result for operation on dictionary at client
+    is compared with result received from replica.
+(6) outcome- pass

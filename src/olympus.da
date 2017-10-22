@@ -54,7 +54,8 @@ class Olympus(process):
                 timeout = self.head_timeout
             else:
                 timeout = self.nonhead_timeout
-            replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients, failure_scenarios.get(itr), timeout], num=1)
+            replica = new(replica_module.Replica, [replica_id, itr, key_pair,
+                                                clients, failure_scenarios.get(itr), timeout], num=1)
             self.configuration.append(replica)
             start(replica)
 
