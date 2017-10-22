@@ -11,7 +11,6 @@ import ast
 class Client(process):
     def setup(client_id, workload, timeout, test_case):
         self.all_replicas_public_keys = {}
-        output("client setup")
         self.olympus = None
         self.configuration = None
         self.configuration_number = -1
@@ -25,6 +24,7 @@ class Client(process):
         self.result_count = 0
         self.result_recd_from_replica = None
         self.olympus_pub_key = None
+        output("client setup completed", level=logging.DEBUG)
 
     def receive(msg= ('all_crypto_keys', olympus_public_key,
                       client_crypto_keys, all_replicas_public_keys), from_=olympus):
@@ -35,16 +35,16 @@ class Client(process):
         self.all_replicas_public_keys = all_replicas_public_keys
 
     def receive(msg= ('config', configuration, configuration_number)):
+        output('received config from olympus', level=logging.INFO)
         self.configuration = configuration
         self.configuration_number = configuration_number
-        """ TODO config validation"""
         self.head = self.configuration[0]
         self.tail = self.configuration[-1]
 
     def receive(msg= ('result', result, result_proof, request_id)):
         if not validate(result, result_proof):
-            output('client: result proof validation failed.'
-                   ' send reconfiguration request')
+            output('result proof validation failed. sending reconfiguration request',
+                   level=logging.CRITICAL)
             send(('reconfiguration-request', self), to=self.olympus)
             return
         # matching result from client and result computed at client
@@ -60,12 +60,17 @@ class Client(process):
                         self.last_result_calc_at_client, level= logging.ERROR)
 
         self.result_recd_from_replica = result
-        output('received result for request id', request_id, result)
+        output('received result for request id', request_id, result, level=logging.INFO)
+
+    def send_request(request_id, request, is_retrasmitted, recipient):
+        output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
+        signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
+        send(('request', signed_request), to=recipient)
 
     def fetch_config():
         send(('get_config'), to=self.olympus)
-        #await(received(('config',self.configuration, self.configuration_number)))
         await(self.configuration is not None)
+
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
 
@@ -87,6 +92,7 @@ class Client(process):
     def sign(data):
         return crypto_keys[0].sign(str(data).encode())
 
+    # validate result returned by the tail replica
     def validate(result, result_proof):
         if len(result_proof) != len(self.configuration):
             output('result proof verification failed due to insufficient'
@@ -98,25 +104,32 @@ class Client(process):
         for replica_result_proof in result_proof:
             decoded_message = ast.literal_eval(replica_result_proof.message.decode())
             rplca_id = decoded_message[3]
-            if not verify(replica_result_proof, rplca_id):
-                output('signature validation failed for replica_id', rplca_id)
-                return False
-            if decoded_message[4] == result_hash:
-                count += 1
+            if not verify(replica_result_proof, rplca_id) or decoded_message[4] != result_hash:
+                if not verify(replica_result_proof, rplca_id):
+                    output('signature validation failed for replica id', rplca_id, 'sending reconfiguration request',
+                           level=logging.CRITICAL)
+                else:
+                    output('result hash is different for', rplca_id, 'sending reconfiguration request',
+                           level=logging.CRITICAL)
             else:
-                output('result hash is different for',rplca_id, level=logging.CRITICAL)
+                count += 1
+
+        # accept the result if t+1 replicas have correctly signed and have same hash
+        # also send reconfiguration request to olympus if all 2t+1 are not correct
 
         t = (len(self.configuration) - 1)/2
-        # TODO - should it check for all?
+        if count != (2*t + 1):
+            send(('reconfiguration-request', self), to=self.olympus)
+
         return count >= (t+1)
 
     def run():
-        output("waiting for olympus to contact...")
+        output("waiting for olympus to contact...", level=logging.INFO)
         await(self.olympus is not None)
         fetch_config()
-        output("received config from olympus ", self.configuration)
+        output("received config from olympus ", self.configuration, level=logging.INFO)
 
-        workload = list(filter(None, workload.split(';'))) #TODO - remove empty
+        workload = list(filter(None, workload.split(';')))
         for i in range(len(workload)):
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
@@ -131,12 +144,6 @@ class Client(process):
                 for replica in self.configuration:
                     send_request(request_id, request, 1, replica)
                 await(some(received(('result', _, _, r_id)), has=r_id == request_id))
-
-            #await(len(listof(self.tail, received(('result', _, _), from_=self.tail))) == i+1)
-            #await(len(some(received(('result', _, _)))) == i+1)
-            #await(setof(a, received(('result', _, a)), request in a[0]))
-            #await(each(req in range(i+1), has= some(received(('result', _, _)))))
-            #await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof))
 
         testing()
         await(received(('done')))
@@ -177,11 +184,6 @@ class Client(process):
                     output(self.test_case, ': PASS', level=logging.INFO)
                 else:
                     output(self.test_case, ': FAIL', level=logging.ERROR)
-
-    def send_request(request_id, request, is_retrasmitted, recipient):
-        output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
-        signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
-        send(('request', signed_request), to=recipient)
 
 def main():
     pass

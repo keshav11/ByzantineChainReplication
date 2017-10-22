@@ -10,17 +10,13 @@ import sys
 import logging
 
 
-config(channel is reliable)
-# TODO: configure clock??
+config(channel is fifo)
 olympus_module = import_da('olympus')
 client_module = import_da('client')
 
 
 def main():
-    if len(sys.argv) > 1:
-        config_file = sys.argv[1]
-    else:
-        config_file = 'config1.txt'
+    config_file = 'config2.txt'
 
     """ reading config from file """
     config = {}
