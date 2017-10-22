@@ -32,7 +32,6 @@ class Olympus(process):
             send(('olympus', self), to=client)
         await(each(client in clients.values(), has=received(('olympus_received', client))))
 
-
     def start_replicas():
         """start num_replicas replicas"""
         output("olympus:start_replicas started")
