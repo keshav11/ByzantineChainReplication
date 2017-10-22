@@ -147,7 +147,6 @@ class Replica(process):
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
 
     def receive(msg=('request', signed_request)):
-        #
         # signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
         decoded_req = ast.literal_eval(signed_request.message.decode())
         if not verify(signed_request, decoded_req[1], type="client"):
