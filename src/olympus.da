@@ -1,6 +1,8 @@
 replica_module = import_da('replica')
 import nacl.signing
 import nacl.encoding
+import nacl.hash
+import nacl.exceptions
 
 
 class Olympus(process):
@@ -12,7 +14,7 @@ class Olympus(process):
         self.crypto_keys = None
 
     def sign(data):
-        return crypto_keys[0].sign(str(data).encode())
+        return crypto_keys[0].sign(str(data).encode('utf-8'))
 
     def verify(data, id=None, type="replica"):
         if type == "replica":
@@ -36,7 +38,7 @@ class Olympus(process):
         v_key_hex = v_key.encode(encoder=nacl.encoding.HexEncoder)
         return (s_key, v_key_hex)
 
-    def receive(msg=('get_config', client)):
+    def receive(msg=('get_config'), from_= client):
         send(('config', self.configuration, self.configuration_number), to=client)
 
     def run():
@@ -56,12 +58,10 @@ class Olympus(process):
 
     def register_to_clients():
         for cnt_id in clients:
-            output("sending self and public_keys to client ", clients[cnt_id])
-            send(('all_public_keys', self.all_replicas_public_keys, self.crypto_keys[1]), to=clients[cnt_id])
-            send(('olympus', self), to=clients[cnt_id])
             key_pair = generate_keys()
             self.all_clients_public_keys[cnt_id] = key_pair[1]
-            send(('cypto_keys', key_pair), to=clients[cnt_id])
+            send(('all_crypto_keys', self.crypto_keys[1],
+                  key_pair, self.all_replicas_public_keys), to=clients[cnt_id])
 
     def start_replicas():
         """start num_replicas replicas"""
@@ -76,8 +76,7 @@ class Olympus(process):
             else:
                 timeout = self.nonhead_timeout
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
-                                                   clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]],
-                          num=1)
+                        clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]], num=1)
             self.configuration.append(replica)
             start(replica)
 

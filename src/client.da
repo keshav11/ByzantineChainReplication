@@ -20,23 +20,23 @@ class Client(process):
         self.TIMER_DURATION = timeout
         self.crypto_keys = None
         self.state_object = Object()
-        self.last_result_calc_at_client = ''
+        self.last_result_calc_at_client = None
         self.test_case = test_case
         self.result_count = 0
-        self.result_recd_from_replica = ''
-        self.olympus_pub_key = ''
+        self.result_recd_from_replica = None
+        self.olympus_pub_key = None
 
-    def receive(msg= ('cypto_keys', crypto_keys)):
-        self.crypto_keys = crypto_keys
-        output('crypto keys received from olympus')
-
-    def receive(msg= ('olympus', olympus)):
+    def receive(msg= ('all_crypto_keys', olympus_public_key,
+                      client_crypto_keys, all_replicas_public_keys), from_=olympus):
+        output('received crypto keys from olympus', level= logging.INFO)
+        self.olympus_pub_key = olympus_public_key
         self.olympus = olympus
-        send(("olympus_received", self), to=self.olympus)
+        self.crypto_keys = client_crypto_keys
+        self.all_replicas_public_keys = all_replicas_public_keys
 
-    def receive(msg= ('config', config, config_no)):
-        self.configuration = config
-        self.configuration_number = config_no
+    def receive(msg= ('config', configuration, configuration_number)):
+        self.configuration = configuration
+        self.configuration_number = configuration_number
         """ TODO config validation"""
         self.head = self.configuration[0]
         self.tail = self.configuration[-1]
@@ -46,6 +46,7 @@ class Client(process):
             output('client: result proof validation failed.'
                    ' send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
+            return
         # matching result from client and result computed at client
         if self.test_case.startswith('verify_result_single_client') \
                 or self.test_case.startswith('client_timeout_testcase'):
@@ -57,34 +58,30 @@ class Client(process):
                 output('result from replica does not match with result computed at client.'
                        ' result received from replica-', result, 'result computed-',
                         self.last_result_calc_at_client, level= logging.ERROR)
-            return #???? why
 
         self.result_recd_from_replica = result
         output('received result for request id', request_id, result)
 
-    def receive(msg= ('all_public_keys', all_replicas_public_keys, olympus_pub_key)):
-        self.all_replicas_public_keys = all_replicas_public_keys
-        self.olympus_pub_key = olympus_pub_key
-        output("client: receive all_public_keys finished")
-
     def fetch_config():
-        send(('get_config', self), to=self.olympus)
-        await(received(('config',self.configuration, self.configuration_number)))
-
+        send(('get_config'), to=self.olympus)
+        #await(received(('config',self.configuration, self.configuration_number)))
+        await(self.configuration is not None)
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
 
-    def verify(data, replica_id):
-        v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[replica_id],
-                                       encoder=nacl.encoding.HexEncoder)
+    def verify(data, id=None, type="replica"):
+        if type == "replica":
+            v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[id],
+                                   encoder=nacl.encoding.HexEncoder)
+        else:
+            v_key = nacl.signing.VerifyKey(self.olympus_pub_key,
+                                           encoder=nacl.encoding.HexEncoder)
         try:
-            v_key.verify(data)
+            v_key.verify(data.message,data.signature)
         except nacl.exceptions.BadSignatureError:
             return False
-        except Exception:
-            return False
 
-        output('signature verified', level=logging.DEBUG)
+        output('signature verified', level= logging.DEBUG)
         return True
 
     def sign(data):
@@ -115,8 +112,7 @@ class Client(process):
 
     def run():
         output("waiting for olympus to contact...")
-        await(received(('olympus', self.olympus)))
-        output("received olympus ", self.olympus)
+        await(self.olympus is not None)
         fetch_config()
         output("received config from olympus ", self.configuration)
 
