@@ -1,22 +1,26 @@
-# py -m da -f --logfilename logs\lf2 src\bcr.da
+# TODO - client par result validation
+# TODO - code comments and cleanup and rearrange methods
 
 import os
 import random
 import string
 import sys
+import logging
+
+
 config(channel is reliable)
 # TODO: configure clock??
 olympus_module = import_da('olympus')
 client_module = import_da('client')
 
-def main():
 
+def main():
     if len(sys.argv) > 1:
         config_file = sys.argv[1]
     else:
         config_file = 'config1.txt'
 
-    print(sys.argv[1])
+    """ reading config from file """
     config = {}
     with open(os.path.join(os.path.abspath(''), 'config', config_file), 'r') as input:
         for line in input:
@@ -26,9 +30,9 @@ def main():
                     val = val.strip()
                     config[key.strip()] = int(val) if str.isdecimal(val) else val
 
-    #print(config)
+    output('config read from file', config_file, 'is', config, level=logging.INFO)
 
-    # parsing failure scenarios for each replica and putting in data structure
+    """ parsing failure scenarios for each replica and putting in data structure """
     failure_scenarios = {}
     for key in config:
         if key.startswith('failures'):
@@ -40,19 +44,18 @@ def main():
                 failure_scenarios[replica] = {
                     conf: config[key]
                 }
+    output('failure scenarios for each replica are', failure_scenarios, level=logging.INFO)
 
-    print(failure_scenarios)
+    """ creating clients and giving them their workload """
     clients = {}
-
     for i in range(config['num_client']):
         client_workload_key = 'workload[' + str(i) + ']'
         workload = config[client_workload_key]
         client_id = 'client' + str(i)
-        # if workload is pseudorandom genererate workload
         if workload.startswith('pseudorandom'):
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
             workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
-        client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000], at='clientnode', num=1)
+        client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000], num=1)
         clients[client_id] = client
         start(client)
 
@@ -62,10 +65,13 @@ def main():
                     int(config['head_timeout'])/1000, int(config['nonhead_timeout'])/1000], num=1)
     start(olympus)
 
+
+# Generates random workload
 def pseudorandom(seed, n):
     random.seed(seed)
     pseudorandom_workload = ''
     operations = ['get', 'put', 'slice', 'append']
+
     for i in range(n):
         curr_operation = operations[random.randint(1, 4)-1]
         if curr_operation == 'get':

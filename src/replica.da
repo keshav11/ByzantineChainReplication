@@ -47,17 +47,16 @@ class Replica(process):
     def sign(data):
         return crypto_keys[0].sign(str(data).encode())
 
-    def receive(msg= ('olympus', olympus)):
+    def receive(msg=('olympus', olympus)):
         self.olympus = olympus
         output('olympus received in client-', self.olympus)
-
 
     def receive(msg=('all_clients_public_keys', all_clients_public_keys)):
         self.all_clients_public_keys = all_clients_public_keys
         output('all_clients_public_keys received in client')
 
     def verify(data, id, type="replica"):
-        if type=="replica":
+        if type == "replica":
             v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[id],
                                    encoder=nacl.encoding.HexEncoder)
         else:
@@ -78,7 +77,7 @@ class Replica(process):
         for key in self.state_object.state:
             print(key, '->', self.state_object.state[key])
 
-    def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
+    def receive(msg=('all_replicas_public_keys', all_replicas_public_keys)):
         self.all_replicas_public_keys = all_replicas_public_keys
         output("replica: receive all_replicas_public_keys finished")
 
@@ -101,8 +100,8 @@ class Replica(process):
             slot_itr+=1
         return slot_itr == slt
 
-    def check_failure_scenario(request_id, request):
-        output('checking for failure scenarios with respect to request id', request_id, 'at', self)
+    def check_failure_scenario(request_id, request, event=None):
+        output('checking for failure scenarios with respect to request id', request_id, 'for event', event)
         client_no = int(request_id.split('_')[0].strip('client'))
         if failure_scenarios and failure_scenarios.get(self.configuration_number):
             scenarios = failure_scenarios[self.configuration_number].split(';')
@@ -112,14 +111,16 @@ class Replica(process):
                 m = self.client_requests_tracker[client_no][probable_fail_scen]
                 search_str = '(' + str(client_no) + ',' + str(m) + '),'
                 for scenario in scenarios:
-                    if search_str in scenario:
+                    scenario = scenario.strip(' ')
+                    if search_str in scenario and scenario.startswith(event):
                         output('Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1])
                         return scenario.split(search_str)[1]
         return False
 
-    def handle_new_request(request_id, request):
+    def handle_new_request(request_id, request, retransmitted):
         output("new request", request_id, level=20)
-        action = check_failure_scenario(request_id, request)
+        event = 'forwarded_request' if retransmitted else 'client_request'
+        action = check_failure_scenario(request_id, request, event)
         self.slot += 1
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes in history present
@@ -127,10 +128,15 @@ class Replica(process):
             send(('reconfiguration-request', self), to=self.olympus)
             return
         operation = request
+        ok_hash = ''
         if action:
             if 'change_operation' in action:
                 output('trigger failure scenario detected, action is to ', action)
                 operation = "get('x')"
+            # TODO - check
+            elif 'change_result' in action:
+                output('trigger failure scenario detected, action is to ', action)
+                ok_hash = crypto_hash('OK')
 
         # TODO - add conditions like mode is active and all lower numbered slots etc
         if len(self.history) < self.slot:
@@ -145,9 +151,10 @@ class Replica(process):
         order_proof = (self.slot, request_id, request, self, self.configuration,
                        [signed_order_statement])
         self.history.append(order_proof)
+        result_hash = ok_hash or crypto_hash(result)
         # TODO - hash of result and sign the proof
         signed_result_proof = [sign(('result', request_id, operation,
-                                     self.replica_id, crypto_hash(result)))]
+                                     self.replica_id, result_hash))]
         shuttle = (order_proof, signed_result_proof)
         output('sending shuttle to ', self.configuration[self.position + 1])
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
@@ -166,7 +173,7 @@ class Replica(process):
         client_no = int(request_id.split('_')[0].strip('client'))
         if not retransmitted:
             self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
-            handle_new_request(request_id, request)
+            handle_new_request(request_id, request, retransmitted)
         # retransmitted request scenario
         else:
             if sender in self.configuration:
@@ -191,7 +198,7 @@ class Replica(process):
                     await_for_result(request_id, 'head-timeout pending request')
                 else: # head has not seen this request
                     output('not seen this request before. treat as new request', level= 20)
-                    handle_new_request(request_id, request)
+                    handle_new_request(request_id, request, retransmitted)
                     await_for_result(request_id, 'head-timeout resent new request')
 
         send('done', to=self) # REMOVE ME
@@ -231,37 +238,33 @@ class Replica(process):
 
     def receive(msg=('shuttle', shuttle), from_=predeccessor):
         # TODO - do the replicas compare result with predeccessor
-        # TODO - check validity
-        output('received shuttle from ', predeccessor)
-        output('shuttle result proof is ', shuttle[1])
-        self.slot = shuttle[0][0]  # get slot from shuttle
+        output('received shuttle', shuttle, 'from', predeccessor, level=logging.INFO)
+        self.slot = shuttle[0][0]
         request_id = shuttle[0][1]
         request = shuttle[0][2]
 
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
-        action = check_failure_scenario(request_id, request)
+        action = check_failure_scenario(request_id, request, event='shuttle')
         if not is_shuttle_valid(shuttle):
-            output('shuttle invalid. sending reconfiguration request')
+            output('order proof invalid. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration-request', self), to=self.olympus)
             return
-
         self.slot = shuttle[0][0]  # get slot from shuttle
         if not lower_numbered_slots_present(self.slot):
             # holes present in history
-            output('slots missing in history. sending reconfiguration request')
+            output('slots missing in history. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration-request', self), to=self.olympus)
             return
-
         operation = request
         ok_hash = ''
         if action:
             if 'change_operation' in action:
                 operation = "get('x')"
+            # TODO - check
             elif 'change_result' in action:
                 output('trigger failure scenario detected, action is to ', action)
                 ok_hash = crypto_hash('OK')
-
         order_statement = ('order', self.slot, operation, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
@@ -287,21 +290,26 @@ class Replica(process):
                 send(('result_shuttle', result, shuttle), to=self.configuration[self.position-1])
 
     def receive(msg= ('result_shuttle', result, shuttle), from_=successor):
-        # TODO - should replica recalculate the result instead of taking tail's result
-        # TODO - is the full shuttle cached or just result proof
-        if not is_shuttle_valid(shuttle):
-            output('shuttle validation failed. send reconfiguration request')
+        output('received result shuttle', shuttle, 'from', successor)
+        if not is_result_shuttle_valid(result, shuttle):
+            output('shuttle validation failed. sending reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
+            return
 
         request_id = shuttle[0][1]
         request = shuttle[0][2]
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][Failure_Scenarios.RESULT_SHUTTLE] += 1
-        action = check_failure_scenario(request_id, request)
+        action = check_failure_scenario(request_id, request, event='result_shuttle')
         if action:
-            # TODO
             if 'change_operation' in action:
                 output('trigger failure scenario detected, action ', action, 'is invalid. ignoring failure.')
+            elif 'change_result' in action:
+                output('trigger failure scenario detected, action is to ', action)
+                decoded_message = ast.literal_eval(shuttle[1][self.position].message.decode())
+                op = decoded_message[2]
+                shuttle[1][self.position] = sign(('result', request_id, op, self.replica_id, crypto_hash('OK')))
+
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
             send(('result_shuttle', result, shuttle), to=self.configuration[self.position - 1])
@@ -324,14 +332,22 @@ class Replica(process):
             rplca_id = decoded_message[3]
             request_from_order_statement = decoded_message[2]
             if not verify(ord_stmnt, rplca_id) or request_from_order_statement != request:
+                output('order proof validation failed for replica', rplca_id, level=logging.CRITICAL)
                 return False
 
+        return True
+
+    def is_result_shuttle_valid(result, shuttle):
+        # result_proof - sign(('result', request_id, operation, self.replica_id, result_hash))
+
+        result_hash = crypto_hash(result)
         result_proof = shuttle[1]
         for replica_result_proof in result_proof:
             decoded_message = ast.literal_eval(replica_result_proof.message.decode())
             rplca_id = decoded_message[3]
-            if not verify(replica_result_proof, rplca_id):
-                output('signature verification failed for replica_id', rplca_id)
+            rplca_result_hash = decoded_message[4]
+            if not verify(replica_result_proof, rplca_id) or result_hash != rplca_result_hash:
+                output('result shuttle verification failed for replica', rplca_id, level=logging.CRITICAL)
                 return False
 
         return True
