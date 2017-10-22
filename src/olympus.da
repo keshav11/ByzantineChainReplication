@@ -32,7 +32,7 @@ class Olympus(process):
         output('sending all_clients_public_keys to replicas')
         for replica in self.configuration:
             send(('all_clients_public_keys', self.all_clients_public_keys), to= replica)
-    
+
     def register_to_clients():
         for cnt_id in clients:
             output("sending self and public_keys to client ", clients[cnt_id])

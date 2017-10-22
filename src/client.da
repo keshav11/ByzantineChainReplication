@@ -64,6 +64,9 @@ class Client(process):
         output('signature verified')
         return True
 
+    def sign(data):
+        return crypto_keys[0].sign(str(data).encode())
+
     def validate(result, result_proof):
         output('validating result...')
         result_hash = crypto_hash(result)
@@ -120,7 +123,8 @@ class Client(process):
 
     def send_request(request_id, request, is_retrasmitted, recipient):
         output("sending request with id ", request_id, " and request workload ", request)
-        send(('request', request_id, request, is_retrasmitted), to=recipient)
+        signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
+        send(('request', signed_request), to=recipient)
 
 
 def main():
