@@ -24,6 +24,7 @@ class Replica(process):
 
     def setup(replica_id:str, position:int, crypto_keys:tuple, clients, failure_scenarios, timeout):
         self.all_replicas_public_keys = {}
+        self.all_clients_public_keys = {}
         self.state_object = Object()
         self.history = []
         self.olympus = None
@@ -48,6 +49,11 @@ class Replica(process):
     def receive(msg= ('olympus', olympus)):
         self.olympus = olympus
         output('olympus received in client-', self.olympus)
+
+
+    def receive(msg=('all_clients_public_keys', all_clients_public_keys)):
+        self.all_clients_public_keys = all_clients_public_keys
+        output('all_clients_public_keys received in client')
 
     def verify(data, replica_id):
         v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[replica_id],
@@ -109,7 +115,7 @@ class Replica(process):
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes in history present
             output('slots missing in history..')
-            output('order proof invalid. send reconfiguration request')
+            output('send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
 
         # TODO - add conditions like mode is active and all lower numbered slots etc
@@ -209,7 +215,7 @@ class Replica(process):
 
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
-        if not is_order_proof_valid(shuttle[0]):
+        if not is_shuttle_valid(shuttle):
             output('order proof invalid. send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
         self.slot = shuttle[0][0]  # get slot from shuttle
@@ -229,7 +235,7 @@ class Replica(process):
 
         shuttle[0][5].append(signed_order_statement)
 
-        result_statement = ('result', request_id, request, crypto_hash(result))
+        result_statement = sign(('result', request_id, request, self.replica_id, crypto_hash(result)))
         shuttle[1].append(result_statement)
         self.history.append(shuttle[0]) # appending order proof to history
 
@@ -251,6 +257,10 @@ class Replica(process):
     def receive(msg= ('result_shuttle', result, shuttle), from_=successor):
         # TODO - should replica recalculate the result instead of taking tail's result
         # TODO - is the full shuttle cached or just result proof
+        if not is_shuttle_valid(shuttle):
+            output('send reconfiguration request')
+            send(('reconfiguration-request', self), to=self.olympus)
+
         request_id = shuttle[0][1]
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][Failure_Scenarios.RESULT_SHUTTLE] += 1
@@ -264,9 +274,10 @@ class Replica(process):
         await(received('request',))
         output("replica: run finished")
 
-    def is_order_proof_valid(order_proof):
+    def is_shuttle_valid(shuttle):
         # order_proof - (self.slot, request_id, request, self, self.configuration,
         #                   [signed_order_statement])
+        order_proof = shuttle[0]
         request = order_proof[2]
         # verify order proof for preceding replicas
         for ord_stmnt in order_proof[5]:
@@ -274,8 +285,17 @@ class Replica(process):
             decoded_message = ast.literal_eval(ord_stmnt.message.decode())
             rplca_id = decoded_message[3]
             request_from_order_statement = decoded_message[2]
-            if not verify(ord_stmnt, rplca_id) and request_from_order_statement != request:
+            if not verify(ord_stmnt, rplca_id) or request_from_order_statement != request:
                 return False
+
+        result_proof = shuttle[1]
+        for replica_result_proof in result_proof:
+            decoded_message = ast.literal_eval(replica_result_proof.message.decode())
+            rplca_id = decoded_message[3]
+            if not verify(replica_result_proof, rplca_id):
+                output('validation failed for replica_id', rplca_id)
+                return False
+
         return True
 
 def main():
