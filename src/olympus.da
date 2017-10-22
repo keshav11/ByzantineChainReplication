@@ -2,41 +2,62 @@ replica_module = import_da('replica')
 import nacl.signing
 import nacl.encoding
 
+
 class Olympus(process):
     def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.configuration = []  # current configuration
         self.configuration_number = 0
+        self.crypto_keys = None
+
+    def sign(data):
+        return crypto_keys[0].sign(str(data).encode())
+
+    def verify(data, id=None, type="replica"):
+        if type == "replica":
+            v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[id],
+                                           encoder=nacl.encoding.HexEncoder)
+        else:
+            v_key = nacl.signing.VerifyKey(self.all_clients_public_keys[id],
+                                           encoder=nacl.encoding.HexEncoder)
+        try:
+            v_key.verify(data.message, data.signature)
+        except nacl.exceptions.BadSignatureError:
+            return False
+
+        output('signature verified', level=logging.DEBUG)
+        return True
 
     def generate_keys():
         """TODO: genererate keys"""
         s_key = nacl.signing.SigningKey.generate()
         v_key = s_key.verify_key
         v_key_hex = v_key.encode(encoder=nacl.encoding.HexEncoder)
-        return (s_key,v_key_hex)
+        return (s_key, v_key_hex)
 
-    def receive(msg= ('get_config', client)):
+    def receive(msg=('get_config', client)):
         send(('config', self.configuration, self.configuration_number), to=client)
 
     def run():
         """ creating num_replica replicas """
+        self.crypto_keys = generate_keys()
         start_replicas()
         register_to_clients()
         send_client_public_keys_to_replicas()
         # wait till done not received
         await(received(('done')))
         output('olympus run finished!')
-    
+
     def send_client_public_keys_to_replicas():
         output('sending all_clients_public_keys to replicas')
         for replica in self.configuration:
-            send(('all_clients_public_keys', self.all_clients_public_keys), to= replica)
+            send(('all_clients_public_keys', self.all_clients_public_keys), to=replica)
 
     def register_to_clients():
         for cnt_id in clients:
             output("sending self and public_keys to client ", clients[cnt_id])
-            send(('all_replicas_public_keys', self.all_replicas_public_keys), to=clients[cnt_id])
+            send(('all_public_keys', self.all_replicas_public_keys, self.crypto_keys[1]), to=clients[cnt_id])
             send(('olympus', self), to=clients[cnt_id])
             key_pair = generate_keys()
             self.all_clients_public_keys[cnt_id] = key_pair[1]
@@ -47,28 +68,31 @@ class Olympus(process):
         output("olympus:start_replicas started")
         for itr in range(num_replica):
             key_pair = generate_keys()
-            replica_id = 'replica'+str(itr)
+            replica_id = 'replica' + str(itr)
             self.all_replicas_public_keys[replica_id] = key_pair[1]
             output('Olympus sending replica id as ', replica_id)
             if itr == 0:
                 timeout = self.head_timeout
             else:
                 timeout = self.nonhead_timeout
-            replica = new(replica_module.Replica, [replica_id, itr, key_pair, clients, failure_scenarios.get(itr), timeout], num=1)
+            replica = new(replica_module.Replica, [replica_id, itr, key_pair,
+                                                   clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]],
+                          num=1)
             self.configuration.append(replica)
             start(replica)
 
         """send public keys and config to replica"""
         for replica in self.configuration:
-            send(('inithist', []), to=replica)
-            send(('all_replicas_public_keys', self.all_replicas_public_keys), to= replica)
+            send(('inithist', sign([])), to=replica)
+            send(('all_replicas_public_keys', sign(self.all_replicas_public_keys)), to=replica)
             send(('config', self.configuration, self.configuration_number), to=replica)
             """TODO: remove this"""
-            send(('done', ), to=replica)
+            send(('done',), to=replica)
 
         """TODO: send public keys to clients"""
         output("olympus:start_replicas finished")
 
+
 def main():
-    olympus = new(Olympus, [ 1, 1 ])
+    olympus = new(Olympus, [1, 1])
     start(olympus)

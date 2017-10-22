@@ -1,3 +1,4 @@
+from src.object import Object
 import time
 import sys
 import logging
@@ -7,9 +8,8 @@ import nacl.hash
 import nacl.exceptions
 import ast
 
-
 class Client(process):
-    def setup(client_id, workload, timeout):
+    def setup(client_id, workload, timeout, test_case):
         self.all_replicas_public_keys = {}
         output("client setup")
         self.olympus = None
@@ -19,6 +19,12 @@ class Client(process):
         self.tail = None
         self.TIMER_DURATION = timeout
         self.crypto_keys = None
+        self.state_object = Object()
+        self.last_result_calc_at_client = ''
+        self.test_case = test_case
+        self.result_count = 0
+        self.result_recd_from_replica = ''
+        self.olympus_pub_key = ''
 
     def receive(msg= ('cypto_keys', crypto_keys)):
         self.crypto_keys = crypto_keys
@@ -40,12 +46,26 @@ class Client(process):
             output('client: result proof validation failed.'
                    ' send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
-            return
+        # matching result from client and result computed at client
+        if self.test_case.startswith('verify_result_single_client') \
+                or self.test_case.startswith('client_timeout_testcase'):
+            if result == self.last_result_calc_at_client:
+                self.result_count += 1
+                output('result from replica match with result computed at client. result received from replica-',
+                       result, 'result computed-', self.last_result_calc_at_client, level= logging.INFO)
+            else:
+                output('result from replica does not match with result computed at client.'
+                       ' result received from replica-', result, 'result computed-',
+                        self.last_result_calc_at_client, level= logging.ERROR)
+            return #???? why
+
+        self.result_recd_from_replica = result
         output('received result for request id', request_id, result)
 
-    def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
+    def receive(msg= ('all_public_keys', all_replicas_public_keys, olympus_pub_key)):
         self.all_replicas_public_keys = all_replicas_public_keys
-        output("client: receive all_replicas_public_keys finished")
+        self.olympus_pub_key = olympus_pub_key
+        output("client: receive all_public_keys finished")
 
     def fetch_config():
         send(('get_config', self), to=self.olympus)
@@ -72,7 +92,8 @@ class Client(process):
 
     def validate(result, result_proof):
         if len(result_proof) != len(self.configuration):
-            output('result proof verification failed due to insufficient number of result statements', level=logging.CRITICAL)
+            output('result proof verification failed due to insufficient'
+                   ' number of result statements', level=logging.CRITICAL)
             return False
         output('validating result...')
         result_hash = crypto_hash(result)
@@ -104,13 +125,10 @@ class Client(process):
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
             send_request(request_id, request, 0, self.head)
+            self.last_result_calc_at_client = self.state_object.evaluate_request(request)
             output('waiting for result of request id', request_id)
             if await(some(received(('result', _, _, r_id)), has= r_id==request_id)):
-                output('await se nikal liya !!!!!')
-                pass
-            # if await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof)):
-            #     output('await se nikal liya !!!!!')
-            #     pass
+                output('result received for request_id', request_id)
             elif timeout(self.TIMER_DURATION):
                 output('timeout occurred for message request_id', request_id)
                 fetch_config()
@@ -124,14 +142,50 @@ class Client(process):
             #await(each(req in range(i+1), has= some(received(('result', _, _)))))
             #await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof))
 
+        testing()
         await(received(('done')))
         output('client run finished!')
+
+    def testing():
+        # Testing
+        if self.test_case.startswith('verify_result_single_client') \
+                or self.test_case.startswith('client_timeout_testcase'):
+            output('Number of correct results received at client-', self.result_count)
+            if self.test_case.startswith('verify_result_single_client_pseudorandom_testcase'):
+                req_count = 250
+            else:
+                req_count = 4
+            if self.result_count == req_count:
+                output(self.test_case, ': PASS', level=logging.INFO)
+            else:
+                output(self.test_case, ': FAIL', level=logging.ERROR)
+        elif self.test_case.startswith('verify_result_multi_client'):
+            output('test for verify_result_multi_client for', self.client_id , level= logging.INFO)
+            if self.client_id == 'client0':
+                req = 'get(movie)'
+                res_at_client = self.state_object.evaluate_request(req)
+                send_request(client_id + '_verify', req, 0, self.head)
+                await(some(received(('result', _, _, r_id)), has=r_id == client_id + '_verify'))
+                output('res_at_client', res_at_client, 'res_from_replica', self.result_recd_from_replica)
+                if res_at_client == self.result_recd_from_replica:
+                    output(self.test_case, ': PASS', level=logging.INFO)
+                else:
+                    output(self.test_case, ': FAIL', level=logging.ERROR)
+            elif self.client_id == 'client1':
+                req = 'get(jedi)'
+                res_at_client = self.state_object.evaluate_request(req)
+                send_request(client_id + '_verify', req, 0, self.head)
+                await(some(received(('result', _, _, r_id)), has=r_id == client_id + '_verify'))
+                output('res_at_client', res_at_client, 'res_from_replica', self.result_recd_from_replica)
+                if res_at_client == self.result_recd_from_replica:
+                    output(self.test_case, ': PASS', level=logging.INFO)
+                else:
+                    output(self.test_case, ': FAIL', level=logging.ERROR)
 
     def send_request(request_id, request, is_retrasmitted, recipient):
         output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
         signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
         send(('request', signed_request), to=recipient)
-
 
 def main():
     pass
