@@ -127,7 +127,8 @@ class Replica(process):
                        [signed_order_statement])
         self.history.append(order_proof)
         # TODO - hash of result and sign the proof
-        signed_result_proof = [sign(('result', request_id, request, crypto_hash(result)))]
+        signed_result_proof = [sign(('result', request_id, request,
+                                     self.replica_id, crypto_hash(result)))]
         shuttle = (order_proof, signed_result_proof)
         client_no = int(request_id.split('_')[0].strip('client'))
         # special case - head does not receive shuttle but we do +1 to maintain consistency

@@ -2,6 +2,7 @@ import time
 import sys
 import nacl.hash
 import nacl.exceptions
+import ast
 
 class Client(process):
     def setup(client_id, workload, timeout):
@@ -63,14 +64,33 @@ class Client(process):
         count = 0
         for replica_result_proof in result_proof:
             # TODO check replica signature
-            # signed_result_proof = [sign(('result', request_id, request, crypto_hash(result)))]
-
-            # TODO do only t+1 replicas need to give same result ?
-            if replica_result_proof[3] == result_hash:
+            #signed_result_proof = [sign(('result', request_id, request,
+            # self.replica_id, crypto_hash(result)))]
+            decoded_message = ast.literal_eval(replica_result_proof.message.decode())
+            rplca_id = decoded_message[3]
+            if not verify(replica_result_proof, rplca_id):
+                return False
+            if decoded_message[4] == result_hash:
                 count += 1
         # TODO - need to read t from file or through olympus ?
         t = (len(result_proof) - 1)/2
         return count >= (t+1)
+
+    def validate_signature():
+        # order_proof - (self.slot, request_id, request, self, self.configuration,
+        #                   [signed_order_statement])
+        request = order_proof[2]
+        # verify order proof for preceding replicas
+        for ord_stmnt in order_proof[5]:
+            # get replica id from order_statement
+            decoded_message = ast.literal_eval(ord_stmnt.message.decode())
+            rplca_id = decoded_message[3]
+            request_from_order_statement = decoded_message[2]
+            if not verify(ord_stmnt, rplca_id) and request_from_order_statement != request:
+                return False
+        return True
+
+
 
     def run():
         output("waiting for olympus to contact...")
