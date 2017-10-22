@@ -1,5 +1,7 @@
 # TODO - client par result validation
 # TODO - code comments and cleanup and rearrange methods
+# TODO - client should continuously send reconfig
+# TODO - improve logging
 
 import os
 import random

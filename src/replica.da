@@ -137,6 +137,9 @@ class Replica(process):
             elif 'change_result' in action:
                 output('trigger failure scenario detected, action is to ', action)
                 ok_hash = crypto_hash('OK')
+            elif 'drop_result_stmt' in action:
+                output('trigger failure scenario detected, action is to ', action)
+                shuttle[1].pop(0)
 
         # TODO - add conditions like mode is active and all lower numbered slots etc
         if len(self.history) < self.slot:
@@ -265,6 +268,9 @@ class Replica(process):
             elif 'change_result' in action:
                 output('trigger failure scenario detected, action is to ', action)
                 ok_hash = crypto_hash('OK')
+            elif 'drop_result_stmt' in action:
+                output('trigger failure scenario detected, action is to ', action)
+                shuttle[1].pop(0)
         order_statement = ('order', self.slot, operation, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
@@ -309,6 +315,9 @@ class Replica(process):
                 decoded_message = ast.literal_eval(shuttle[1][self.position].message.decode())
                 op = decoded_message[2]
                 shuttle[1][self.position] = sign(('result', request_id, op, self.replica_id, crypto_hash('OK')))
+            elif 'drop_result_stmt' in action:
+                output('trigger failure scenario detected, action is to ', action)
+                shuttle[1].pop(0)
 
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
@@ -342,6 +351,11 @@ class Replica(process):
 
         result_hash = crypto_hash(result)
         result_proof = shuttle[1]
+
+        if len(result_proof) != len(self.configuration):
+            output('result shuttle verification failed due to insufficient number of result statements', level=logging.CRITICAL)
+            return False
+
         for replica_result_proof in result_proof:
             decoded_message = ast.literal_eval(replica_result_proof.message.decode())
             rplca_id = decoded_message[3]

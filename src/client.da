@@ -40,6 +40,7 @@ class Client(process):
             output('client: result proof validation failed.'
                    ' send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
+            return
         output('received result for request id', request_id, result)
 
     def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
@@ -70,6 +71,9 @@ class Client(process):
         return crypto_keys[0].sign(str(data).encode())
 
     def validate(result, result_proof):
+        if len(result_proof) != len(self.configuration):
+            output('result proof verification failed due to insufficient number of result statements', level=logging.CRITICAL)
+            return False
         output('validating result...')
         result_hash = crypto_hash(result)
         count = 0
