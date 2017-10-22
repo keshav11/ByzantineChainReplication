@@ -49,9 +49,10 @@ class Client(process):
                 output('result from replica match with result computed at client. result received from replica-',
                        result, 'result computed-', self.last_result, level= logging.INFO)
             else:
-                output('result from replica match with result computed at client. result received from replica-',
-                       result, 'result computed-', self.last_result, level= logging.INFO)
-
+                output('result from replica does not match with result computed at client.'
+                       ' result received from replica-', result, 'result computed-',
+                        self.last_result, level= logging.INFO)
+            return #???? why
         output('received result for request id', request_id, result)
 
     def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
@@ -82,6 +83,9 @@ class Client(process):
         return crypto_keys[0].sign(str(data).encode())
 
     def validate(result, result_proof):
+        if len(result_proof) != len(self.configuration):
+            output('result proof verification failed due to insufficient number of result statements', level=logging.CRITICAL)
+            return False
         output('validating result...')
         result_hash = crypto_hash(result)
         count = 0
@@ -93,9 +97,11 @@ class Client(process):
                 return False
             if decoded_message[4] == result_hash:
                 count += 1
+            else:
+                output('result hash is different for',rplca_id, level=logging.CRITICAL)
 
-        # TODO - need to read t from file or through olympus ?
-        t = (len(result_proof) - 1)/2
+        t = (len(self.configuration) - 1)/2
+        # TODO - should it check for all?
         return count >= (t+1)
 
     def run():
@@ -105,7 +111,7 @@ class Client(process):
         fetch_config()
         output("received config from olympus ", self.configuration)
 
-        workload = list(filter(None, workload.split(';'))) # remove empty
+        workload = list(filter(None, workload.split(';'))) #TODO - remove empty
         for i in range(len(workload)):
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
