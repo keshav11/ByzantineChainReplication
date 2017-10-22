@@ -1,5 +1,6 @@
 import time
 import sys
+import logging
 import nacl.signing
 import nacl.encoding
 import nacl.hash
@@ -36,7 +37,8 @@ class Client(process):
 
     def receive(msg= ('result', result, result_proof, request_id)):
         if not validate(result, result_proof):
-            output('client: result proof validation failed. send')
+            output('client: result proof validation failed.'
+                   ' send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
         output('received result for request id', request_id, result)
 
@@ -61,7 +63,7 @@ class Client(process):
         except Exception:
             return False
 
-        output('signature verified')
+        output('signature verified', level=logging.DEBUG)
         return True
 
     def sign(data):
@@ -75,7 +77,7 @@ class Client(process):
             decoded_message = ast.literal_eval(replica_result_proof.message.decode())
             rplca_id = decoded_message[3]
             if not verify(replica_result_proof, rplca_id):
-                output('validation failed for replica_id', rplca_id)
+                output('signature validation failed for replica_id', rplca_id)
                 return False
             if decoded_message[4] == result_hash:
                 count += 1

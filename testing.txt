@@ -1,1 +1,2 @@
-testing
+python -m da --logfile --logfilename logs\log.txt -F info --message-buffer-size 100000  src\bcr.da config1.txt
+python -m da --logfile --logfilename logs\log.txt -F info --message-buffer-size 100000  src\bcr.da config_client_timeout.txt

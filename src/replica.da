@@ -1,6 +1,7 @@
 from src.object import Object
 from enum import Enum
 import nacl.signing
+import logging
 import nacl.encoding
 import nacl.hash
 import nacl.exceptions
@@ -67,7 +68,7 @@ class Replica(process):
         except nacl.exceptions.BadSignatureError:
             return False
 
-        output('signature verified')
+        output('signature verified', level= logging.DEBUG)
         return True
 
     def crypto_hash(data):
@@ -153,7 +154,7 @@ class Replica(process):
         # signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
         decoded_req = ast.literal_eval(signed_request.message.decode())
         if not verify(signed_request, decoded_req[1], type="client"):
-            output('invalid client request received')
+            output('signature verification failed for request-', decoded_req[0])
             return
         else:
             request_id = decoded_req[0]
@@ -279,7 +280,7 @@ class Replica(process):
         # TODO - should replica recalculate the result instead of taking tail's result
         # TODO - is the full shuttle cached or just result proof
         if not is_shuttle_valid(shuttle):
-            output('send reconfiguration request')
+            output('shuttle validation failed. send reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
 
         request_id = shuttle[0][1]
@@ -320,7 +321,7 @@ class Replica(process):
             decoded_message = ast.literal_eval(replica_result_proof.message.decode())
             rplca_id = decoded_message[3]
             if not verify(replica_result_proof, rplca_id):
-                output('validation failed for replica_id', rplca_id)
+                output('signature verification failed for replica_id', rplca_id)
                 return False
 
         return True
