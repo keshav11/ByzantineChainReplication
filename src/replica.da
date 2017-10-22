@@ -37,6 +37,7 @@ class Replica(process):
         self.position = position
         self.result_cache = {}
         self.replica_id = replica_id
+        self.olympus_pub_key = olympus_pub_key
         self.client_requests_tracker = [{
             Failure_Scenarios.CLIENT_REQUEST: 0,
             Failure_Scenarios.FORWARDED_REQUEST: 0,
@@ -54,7 +55,7 @@ class Replica(process):
 
     def receive(msg=('all_clients_public_keys', all_clients_public_keys)):
         self.all_clients_public_keys = all_clients_public_keys
-        output('all_clients_public_keys received in client')
+        output('all_clients_public_keys received')
 
     def verify(data, id=None, type="replica"):
         if type == "replica":
@@ -91,7 +92,6 @@ class Replica(process):
             output('signature verification successful for '
                    'all_replicas_public_keys from olympus', level= logging.INFO)
         self.all_replicas_public_keys = decoded_req
-        output('!!!!!!!',self.all_replicas_public_keys)
         output("replica: receive all_replicas_public_keys finished")
 
     def receive(msg=('inithist', history), from_=olympus):
