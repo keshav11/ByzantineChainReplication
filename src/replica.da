@@ -87,8 +87,9 @@ class Replica(process):
         return slot_itr == slt
 
     def check_failure_scenario(request_id, request):
+        output('checking for failure scenarios with respect to request id', request_id, 'at', self)
         client_no = int(request_id.split('_')[0].strip('client'))
-        if failure_scenarios.get(self.configuration_number):
+        if failure_scenarios and failure_scenarios.get(self.configuration_number):
             scenarios = failure_scenarios[self.configuration_number].split(';')
             output('scenarios are ', scenarios)
             for probable_fail_scen in self.client_requests_tracker[client_no]:
@@ -98,10 +99,12 @@ class Replica(process):
                 for scenario in scenarios:
                     if search_str in scenario:
                         output('Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1])
-        return True
+                        return scenario.split(search_str)[1]
+        return False
 
     def handle_new_request(request_id, request_id, request):
         output("new request", request_id, level=20)
+        check_failure_scenario(request_id, request)
         self.slot += 1
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes in history present
@@ -110,7 +113,6 @@ class Replica(process):
             send(('reconfiguration-request', self), to=self.olympus)
 
         # TODO - add conditions like mode is active and all lower numbered slots etc
-        output('head sending replica id as ', self.replica_id)
         if len(self.history) < self.slot:
             order_statement = ('order', self.slot, request, self.replica_id)
             signed_order_statement = sign(order_statement)  # sign order statement
@@ -126,20 +128,23 @@ class Replica(process):
         # TODO - hash of result and sign the proof
         signed_result_proof = [sign(('result', request_id, request, crypto_hash(result)))]
         shuttle = (order_proof, signed_result_proof)
-        client_no = int(request_id.split('_')[0].strip('client'))
-        # special case - head does not receive shuttle but we do +1 to maintain consistency
-        self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
         output('sending shuttle to ', self.configuration[self.position + 1])
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
 
-    def receive(msg=('request', request_id, request, retransmitted)):
-        output("received request with id ", request_id, " retransmitted ", retransmitted, level=20)
+    def receive(msg=('request', request_id, request, retransmitted), from_=sender):
+        output("received request with id ", request_id, " retransmitted ", retransmitted, " from ", sender, level=20)
+        client_no = int(request_id.split('_')[0].strip('client'))
         if not retransmitted:
-            client_no = int(request_id.split('_')[0].strip('client'))
             self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
-            check_failure_scenario(request_id, request)
             handle_new_request(request_id, request)
-        else: # retransmitted request
+        # retransmitted request scenario
+        else:
+            if sender in self.configuration:
+                # received forwarded request from another replica
+                self.client_requests_tracker[client_no][Failure_Scenarios.FORWARDED_REQUEST] += 1
+            else:
+                self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
+
             if is_correct(self) and request_id in self.result_cache:
                 output('result already in cache. send result to client', level= 20)
                 client = clients[request_id.split('_')[0]]
@@ -152,7 +157,6 @@ class Replica(process):
                 send(('request', request_id, request, 1), to= self.configuration[0])
                 await_for_result(request_id, 'nonhead-timeout') # passing id to know which timer expired
             else:
-                output('current position is head.', level= 20)
                 if is_request_pending(request_id): # Head has seen the request
                     await_for_result(request_id, 'head-timeout pending request')
                 else: # head has not seen this request
@@ -205,39 +209,37 @@ class Replica(process):
 
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
+        action = check_failure_scenario(request_id, request)
         if not is_order_proof_valid(shuttle[0]):
-            output('order proof invalid. send reconfiguration request')
+            output('order proof invalid. sending reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
+
         self.slot = shuttle[0][0]  # get slot from shuttle
         if not lower_numbered_slots_present(self.slot):
-            # holes in history present
-            output('slots missing in history..')
-            output('order proof invalid. send reconfiguration request')
+            # holes present in history
+            output('slots missing in history. sending reconfiguration request')
             send(('reconfiguration-request', self), to=self.olympus)
-        request_id = shuttle[0][1]
-        request = shuttle[0][2]
-        order_statement = ('order', self.slot, request, self.replica_id)
+
+        operation = request
+        if action and 'change_operation' in action:
+            operation = "get('x')"
+        order_statement = ('order', self.slot, operation, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
         output('result of request ', request, ' is ', result)
         output('state object at this moment is ')
         print_state_object()
-
         shuttle[0][5].append(signed_order_statement)
 
-        result_statement = ('result', request_id, request, crypto_hash(result))
+        result_statement = ('result', request_id, operation, crypto_hash(result))
         shuttle[1].append(result_statement)
         self.history.append(shuttle[0]) # appending order proof to history
-
         if self.position != len(self.configuration)-1:   # it is not tail replica
             #output('sending shuttle to ', self.configuration[self.position+1])
             send(('shuttle', shuttle), to=self.configuration[self.position+1])
         else:
             output('tail will send result to client for request id ', request_id, '...', level=20)
             client = clients[request_id.split('_')[0]]
-            client_no = int(request_id.split('_')[0].strip('client'))
-            # special case - tail does not receive result shuttle but we do +1 to maintain consistency
-            self.client_requests_tracker[client_no][Failure_Scenarios.RESULT_SHUTTLE] += 1
             send(('result', result, shuttle[1], request_id), to=client)
             # TODO - is the full shuttle cached or just result proof
             self.result_cache[request_id] = (result, shuttle[1])

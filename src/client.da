@@ -54,9 +54,9 @@ class Client(process):
     def run():
         output("waiting for olympus to contact...")
         await(received(('olympus', self.olympus)))
-        output("client received olympus ", self.olympus)
+        output("received olympus ", self.olympus)
         fetch_config()
-        output("client received config from olympus ", self.configuration)
+        output("received config from olympus ", self.configuration)
 
         workload = list(filter(None, workload.split(';'))) # remove empty
         for i in range(len(workload)):
@@ -75,6 +75,7 @@ class Client(process):
                 fetch_config()
                 for replica in self.configuration:
                     send_request(request_id, request, 1, replica)
+                await(some(received(('result', _, _, r_id)), has=r_id == request_id))
 
             #await(len(listof(self.tail, received(('result', _, _), from_=self.tail))) == i+1)
             #await(len(some(received(('result', _, _)))) == i+1)
@@ -82,14 +83,11 @@ class Client(process):
             #await(each(req in range(i+1), has= some(received(('result', _, _)))))
             #await(received(('result', self.result, self.result_proof)) and validate(self.result, self.result_proof))
 
-            # TODO - mechanism to await till all responses received are correct
-            # await(len(received(('result', _, _))) == len(workload))
-
         await(received(('done')))
         output('client run finished!')
 
     def send_request(request_id, request, is_retrasmitted, recipient):
-        output("sending request with id ", request_id, " and request workload ", request)
+        output("sending request with id ", request_id, " and request workload ", request, " to ", recipient)
         send(('request', request_id, request, is_retrasmitted), to=recipient)
 
 
