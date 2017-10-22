@@ -63,7 +63,6 @@ class Olympus(process):
             send(('inithist', []), to=replica)
             send(('all_replicas_public_keys', self.all_replicas_public_keys), to= replica)
             send(('config', self.configuration, self.configuration_number), to=replica)
-            send(('olympus', self), to=replica)
             """TODO: remove this"""
             send(('done', ), to=replica)
 
