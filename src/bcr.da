@@ -9,7 +9,7 @@ olympus_module = import_da('olympus')
 client_module = import_da('client')
 
 def main():
-    config_file = 'config1.txt'
+    config_file = 'config2.txt'
     config = {}
     with open(os.path.join(os.path.abspath(''), 'config', config_file), 'r') as input:
         for line in input:
@@ -45,7 +45,7 @@ def main():
         if workload.startswith('pseudorandom'):
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
             workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
-        client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000], num=1)
+        client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000], at='clientnode', num=1)
         clients[client_id] = client
         start(client)
 

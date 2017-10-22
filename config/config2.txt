@@ -1,7 +1,7 @@
 # test case name.  can be used to trigger test case specific code in client,
 # e.g., to generate special request sequences or validate intermediate or
 # final values of object state. [2017-09-12: added this item]
-test_case_name = test1
+test_case_name = test2
 
 # number of failures to tolerate.  number of replicas is 2t+1.
 t = 1
@@ -39,6 +39,6 @@ workload[0] = put('jedi,'luke skywalker'); get('jedi')
 # configurations are numbered starting with 0.  replicas are numbered by
 # position in the chain, starting from 0.  replicas without a specified
 # failure scenario are failure-free.
-failures[0,0] = client_request(0,1),change_operation()
+failures[0,2] = client_request(0,2),change_result()
 #failures[0,1] = shuttle(0,1),change_operation()
 #failures[0,2] = random_shuttle(0,1),send()
