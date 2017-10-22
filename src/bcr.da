@@ -2,6 +2,7 @@
 
 import os
 import random
+import string
 config(channel is reliable)
 # TODO: configure clock??
 olympus_module = import_da('olympus')
@@ -61,19 +62,19 @@ def pseudorandom(seed, n):
     for i in range(n):
         curr_operation = operations[random.randint(1, 4)-1]
         if curr_operation == 'get':
-            key = str(random.randint(1, 255))
+            key = ''.join(random.choice(string.ascii_lowercase) for x in range(4))
             curr_operation += '('+key+')'
         elif curr_operation == 'put':
-            key = str(random.randint(1, 255))
-            value = str(random.randint(1, 255))
+            key = ''.join(random.choice(string.ascii_lowercase) for x in range(4))
+            value = ''.join(random.choice(string.ascii_lowercase) for x in range(4))
             curr_operation += '(' +key+ ','+value+ ')'
         elif curr_operation == 'slice':
-            key = str(random.randint(1, 10))
-            value = str(random.randint(1, 255)) + ':' + str(random.randint(1, 255))
+            key = ''.join(random.choice(string.ascii_lowercase) for x in range(4))
+            value = str(random.randint(1, 4)) + ':' + str(random.randint(1, 4))
             curr_operation += '(' + key + ',' + value + ')'
         elif curr_operation == 'append':
-            key = str(random.randint(1, 255))
-            value = str(random.randint(1, 255))
+            key = ''.join(random.choice(string.ascii_lowercase) for x in range(4))
+            value = ''.join(random.choice(string.ascii_lowercase) for x in range(4))
             curr_operation += '(' + key + ',' + value + ')'
 
         pseudorandom_workload += curr_operation
@@ -81,3 +82,4 @@ def pseudorandom(seed, n):
             pseudorandom_workload += '; '
 
     return pseudorandom_workload.strip()
+

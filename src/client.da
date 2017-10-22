@@ -1,19 +1,27 @@
 import time
 import sys
+import nacl.signing
+import nacl.encoding
 import nacl.hash
 import nacl.exceptions
+import ast
+
 
 class Client(process):
     def setup(client_id, workload, timeout):
+        self.all_replicas_public_keys = {}
         output("client setup")
         self.olympus = None
         self.configuration = None
         self.configuration_number = -1
         self.head = None
         self.tail = None
-        self.result = None
-        self.result_proof = None
         self.TIMER_DURATION = timeout
+        self.crypto_keys = None
+
+    def receive(msg= ('cypto_keys', crypto_keys)):
+        self.crypto_keys = crypto_keys
+        output('crypto keys received from olympus')
 
     def receive(msg= ('olympus', olympus)):
         self.olympus = olympus
@@ -27,9 +35,14 @@ class Client(process):
         self.tail = self.configuration[-1]
 
     def receive(msg= ('result', result, result_proof, request_id)):
-        self.result = result
-        self.result_proof = result_proof
+        if not validate(result, result_proof):
+            output('client: result proof validation failed. send')
+            send(('reconfiguration-request', self), to=self.olympus)
         output('received result for request id', request_id, result)
+
+    def receive(msg= ('all_replicas_public_keys', all_replicas_public_keys)):
+        self.all_replicas_public_keys = all_replicas_public_keys
+        output("client: receive all_replicas_public_keys finished")
 
     def fetch_config():
         send(('get_config', self), to=self.olympus)
@@ -38,15 +51,35 @@ class Client(process):
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
 
+    def verify(data, replica_id):
+        v_key = nacl.signing.VerifyKey(self.all_replicas_public_keys[replica_id],
+                                       encoder=nacl.encoding.HexEncoder)
+        try:
+            v_key.verify(data)
+        except nacl.exceptions.BadSignatureError:
+            return False
+        except Exception:
+            return False
+
+        output('signature verified')
+        return True
+
+    def sign(data):
+        return crypto_keys[0].sign(str(data).encode())
+
     def validate(result, result_proof):
         output('validating result...')
         result_hash = crypto_hash(result)
         count = 0
         for replica_result_proof in result_proof:
-            # TODO check replica signature
-            # TODO do only t+1 replicas need to give same result ?
-            if replica_result_proof[3] == result_hash:
+            decoded_message = ast.literal_eval(replica_result_proof.message.decode())
+            rplca_id = decoded_message[3]
+            if not verify(replica_result_proof, rplca_id):
+                output('validation failed for replica_id', rplca_id)
+                return False
+            if decoded_message[4] == result_hash:
                 count += 1
+
         # TODO - need to read t from file or through olympus ?
         t = (len(result_proof) - 1)/2
         return count >= (t+1)
@@ -87,8 +120,9 @@ class Client(process):
         output('client run finished!')
 
     def send_request(request_id, request, is_retrasmitted, recipient):
-        output("sending request with id ", request_id, " and request workload ", request, " to ", recipient)
-        send(('request', request_id, request, is_retrasmitted), to=recipient)
+        output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
+        signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
+        send(('request', signed_request), to=recipient)
 
 
 def main():
