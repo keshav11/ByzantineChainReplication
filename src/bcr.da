@@ -3,13 +3,20 @@
 import os
 import random
 import string
+import sys
 config(channel is reliable)
 # TODO: configure clock??
 olympus_module = import_da('olympus')
 client_module = import_da('client')
 
 def main():
-    config_file = 'config2.txt'
+
+    if len(sys.argv) > 1:
+        config_file = sys.argv[1]
+    else:
+        config_file = 'config1.txt'
+
+    print(sys.argv[1])
     config = {}
     with open(os.path.join(os.path.abspath(''), 'config', config_file), 'r') as input:
         for line in input:
