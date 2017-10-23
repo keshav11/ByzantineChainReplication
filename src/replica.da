@@ -74,7 +74,7 @@ class Replica(process):
 
     def print_state_object():
         for key in self.state_object.state:
-            print(key, '->', self.state_object.state[key])
+            output(key, '->', self.state_object.state[key], level=logging.INFO)
 
     def receive(msg=('olympus', olympus)):
         self.olympus = olympus
@@ -143,7 +143,7 @@ class Replica(process):
 
         result = self.state_object.evaluate_request(request)
         output('result of request', request, ' is ', result, level=logging.INFO)
-        output('state object at this moment is')
+        output('state object at this moment is', level=logging.INFO)
         print_state_object()
         order_proof = (self.slot, request_id, request, self, self.configuration,
                        [signed_order_statement])
