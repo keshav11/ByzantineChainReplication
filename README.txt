@@ -1,6 +1,24 @@
 PLATFORM
+OS: Windows 10
+DistAlgo version: 1.0.9
+Python implementation: CPython
+Python version: 3.5
 
 INSTRUCTION
+1. Unzip the <> in your Windows 10 PC. Go to the root of the unzipped folder.
+2. Put your config file in config folder.
+3. Open two command line terminals
+4. In the first terminal run the following command with <config_file_name.txt> as the argument
+    python -m da --logfile -n MainNode --logfilename logs\log_verify_result_single_client_2_mainnode.txt -F info --message-buffer-size 100000  src\bcr.da <config_file_name.txt>
+5. In the second terminal run the following command with <config_file_name.txt> as the argument
+    python -m da --logfile -n ClientNode --logfilename logs\log_verify_result_single_client_2_clientnode.txt -F info --message-buffer-size 100000  src\bcr.da <config_file_name.txt>
+
+For example to run test case 1:
+1. open 2 command line terminals
+2. on terminal 1 run the following command-
+    python -m da --logfile -n MainNode --logfilename logs\log_verify_result_single_client_2_mainnode.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_testcase_2.txt
+2. on terminal 2 run the following command-
+    python -m da --logfile -n ClientNode --logfilename logs\log_verify_result_single_client_2_clientnode.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_testcase_2.txt
 
 WORKLOAD GENERATION
 Algorithm:
@@ -11,7 +29,7 @@ pseudorandom(seed, n):
         generated key and value using random to generate 4 random lowercase character
 
 BUGS AND LIMITATIONS
-
+Not tested with multi host setup
 
 CONTRIBUTIONS
 Keshav Gupta:
@@ -23,8 +41,17 @@ Keshav Gupta:
     handle retransmitted request as described in paper
     statement and signed result statement, send updated shuttle
     check validity of order proof (incl. signatures), add signed order
-    check that dictionary contains expected content at end of test cases 1-6
+    check that dictionary contains expected content at end of test cases
 
+Pratik Sushil Zambani:
+    support configuration files specified in project.txt
+    generate request sequence specified in config file
+    implementation append and slice in dictionary
+    head: handle new request: assign slot, result stmt, send shuttle
+    tail: send result to client; send result shuttle to predecessor
+    handle result shuttle save, and forward it
+    fault-injection: required triggers
+    fault-injection: required failures
 
 
 MAIN FILES
@@ -35,16 +62,27 @@ src/olympus.da
 src/replica.da
 
 CODE SIZE
-algorithm
+Algorithm
+github.com/AlDanial/cloc v 1.72
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+Python                           5             82              6            962
+DAL                              4            107              6            708
+-------------------------------------------------------------------------------
+SUM:                             9            189             12           1670
+-------------------------------------------------------------------------------
 other
+
 total
+estimate for test code-  100-150 lines
 
 LANGUAGE FEATURE USAGE.
-list comprehensions
-dictionary comprehensions
-set comprehensions
-aggregations
-quantifications
+list comprehensions- 8
+dictionary comprehensions- 0
+set comprehensions- 0
+aggregations- 0
+quantifications- 0
 
 OTHER COMMENTS
 
