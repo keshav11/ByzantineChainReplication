@@ -127,9 +127,6 @@ class Replica(process):
             elif 'change_result' in action:
                 output('trigger failure scenario detected, action is to', action, level=logging.INFO)
                 ok_hash = crypto_hash('OK')
-            elif 'drop_result_stmt' in action:
-                output('trigger failure scenario detected, action is to', action, level=logging.INFO)
-                shuttle[1].pop(0)
 
         if len(self.history) < self.slot:
             order_statement = ('order', self.slot, operation, self.replica_id)
