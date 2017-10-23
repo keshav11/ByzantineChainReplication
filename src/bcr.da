@@ -16,7 +16,11 @@ client_module = import_da('client')
 
 
 def main():
-    config_file = 'config2.txt'
+
+    if len(sys.argv) > 1:
+        config_file = sys.argv[1]
+    else:
+        config_file = 'config2.txt'
 
     """ reading config from file """
     config = {}
@@ -54,7 +58,7 @@ def main():
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
             workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
         client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000,
-                                            config['test_case_name']], num=1)
+                                            config['test_case_name']], at= 'ClientNode', num=1)
         clients[client_id] = client
         start(client)
 
