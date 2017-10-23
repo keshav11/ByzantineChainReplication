@@ -73,8 +73,8 @@ Test case 4: verify_result_multi_client_1
 (6) outcome- PASS
 
 Test case 5: stress_test
-(1) 10 clients each having workload= pseudorandom(255,50)
-(2) configuration file- config_pseudorandom_result_verify_testcase_1.txt
+(1) 4 clients each having workload= pseudorandom(255,100)
+(2) configuration file- config_stress_test.txt
 (3) python -m da -n MainNode --logfile --logfilename logs\log_stress_test_mainnode.txt -F info --message-buffer-size 100000  src\bcr.da config_stress_test.txt
     python -m da -n ClientNode --logfile --logfilename logs\log_stress_test_clientnode.txt -F info --message-buffer-size 100000  src\bcr.da config_stress_test.txt
 (4) log files-
