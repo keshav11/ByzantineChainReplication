@@ -73,8 +73,9 @@ Python                           1             10              2             73
 SUM:                             5            117              8            781
 -------------------------------------------------------------------------------
 other
-
+about 450
 total
+~1231
 estimate for test code-  100-150 lines
 
 LANGUAGE FEATURE USAGE.
