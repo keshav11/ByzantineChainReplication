@@ -117,9 +117,7 @@ class Replica(process):
         self.slot += 1
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes present in history
-            output('slots missing in history. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration-request', self), to=self.olympus)
-            return
         operation = request
         ok_hash = ''
         if action:
@@ -218,9 +216,7 @@ class Replica(process):
         self.slot = shuttle[0][0]  # get slot from shuttle
         if not lower_numbered_slots_present(self.slot):
             # holes present in history
-            output('slots missing in history. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration-request', self), to=self.olympus)
-            return
         operation = request
         ok_hash = ''
         if action:
