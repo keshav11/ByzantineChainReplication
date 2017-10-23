@@ -5,7 +5,7 @@ Python implementation: CPython
 Python version: 3.5
 
 INSTRUCTION
-1. Unzip the <> in your Windows 10 PC. Go to the root of the unzipped folder.
+1. Unzip the release zip in your Windows 10 PC. Go to the root of the unzipped folder.
 2. Put your config file in config folder.
 3. Open two command line terminals
 4. In the first terminal run the following command with <config_file_name.txt> as the argument
