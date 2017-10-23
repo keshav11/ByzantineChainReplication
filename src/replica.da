@@ -352,7 +352,7 @@ class Replica(process):
         order_proof = shuttle[0]
         request = order_proof[2]
 
-        if len(order_proof[5]) != len(self.configuration):
+        if len(order_proof[5]) != len(self.position):
             output('shuttle verification failed due to insufficient number of order statements',
                    level=logging.CRITICAL)
             return False
