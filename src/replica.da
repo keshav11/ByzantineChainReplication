@@ -152,7 +152,7 @@ class Replica(process):
         signed_result_proof = [sign(('result', request_id, operation,
                                      self.replica_id, result_hash))]
         shuttle = (order_proof, signed_result_proof)
-        output('sending shuttle to ', self.configuration[self.position + 1])
+        output('sending shuttle to', self.configuration[self.position + 1], level=logging.INFO)
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
 
     # message handler for receiving requests either from client or retransmitted ones from replicas
@@ -234,7 +234,7 @@ class Replica(process):
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
         output('result of request', request, 'is', result, level=logging.INFO)
-        output('state object at this moment is ')
+        output('state object at this moment is', level=logging.INFO)
         print_state_object()
         shuttle[0][5].append(signed_order_statement)
 
@@ -280,7 +280,7 @@ class Replica(process):
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
             send(('result_shuttle', result, shuttle), to=self.configuration[self.position - 1])
-        output('received result shuttle from ', successor)
+        output('received result shuttle from ', successor, level=logging.INFO)
 
     def run():
         await(received(('done')))
@@ -305,7 +305,8 @@ class Replica(process):
 
     # this function checks if failure needs to be triggered on events
     def check_failure_scenario(request_id, request, event=None):
-        output('checking for failure scenarios with respect to request id', request_id, 'for event', event)
+        output('checking for failure scenarios with respect to request id', request_id, 'for event', event,
+               level=logging.INFO)
         client_no = int(request_id.split('_')[0].strip('client'))
         if failure_scenarios and failure_scenarios.get(self.configuration_number):
             scenarios = failure_scenarios[self.configuration_number].split(';')

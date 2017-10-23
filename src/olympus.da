@@ -3,6 +3,7 @@ import nacl.signing
 import nacl.encoding
 import nacl.hash
 import nacl.exceptions
+import logging
 
 
 class Olympus(process):
@@ -65,12 +66,11 @@ class Olympus(process):
 
     def start_replicas():
         """start num_replicas replicas"""
-        output("olympus:start_replicas started")
+        output("starting replicas...", level=logging.INFO)
         for itr in range(num_replica):
             key_pair = generate_keys()
             replica_id = 'replica' + str(itr)
             self.all_replicas_public_keys[replica_id] = key_pair[1]
-            output('Olympus sending replica id as ', replica_id)
             if itr == 0:
                 timeout = self.head_timeout
             else:
@@ -85,11 +85,10 @@ class Olympus(process):
             send(('inithist', sign([])), to=replica)
             send(('all_replicas_public_keys', sign(self.all_replicas_public_keys)), to=replica)
             send(('config', self.configuration, self.configuration_number), to=replica)
-            """TODO: remove this"""
+
             send(('done',), to=replica)
 
-        """TODO: send public keys to clients"""
-        output("olympus:start_replicas finished")
+        output("started all replicas", level=logging.INFO)
 
 
 def main():
