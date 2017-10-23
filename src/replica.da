@@ -351,6 +351,11 @@ class Replica(process):
         #                   [signed_order_statement])
         order_proof = shuttle[0]
         request = order_proof[2]
+
+        if len(order_proof[5]) != len(self.configuration):
+            output('shuttle verification failed due to insufficient number of order statements',
+                   level=logging.CRITICAL)
+            return False
         # verify order proof for preceding replicas
         for ord_stmnt in order_proof[5]:
             # get replica id from order_statement
@@ -370,7 +375,7 @@ class Replica(process):
         order_proof = shuttle[0]
         request = order_proof[2]
 
-        if len(order_proof) != len(self.configuration):
+        if len(order_proof[5]) != len(self.configuration):
             output('result shuttle verification failed due to insufficient number of order statements',
                    level=logging.CRITICAL)
             return False
