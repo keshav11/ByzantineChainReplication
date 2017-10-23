@@ -81,3 +81,36 @@ Test case 5: stress_test
         logs\logs\log_stress_test_mainnode.txt
         logs\log_stress_test_clientnode.txt
 (5) outcome- PASS
+
+Test Case 6:
+(1) 2 clients having workload of pseudorandom(233,6) and put('jedi,'luke skywalker'); slice('jedi','0:4'); get('jedi'); put('movie', 'wars'); get('movie2') respectively.
+There are 2 failures injected in this scenario -
+1st one triggers at replica 1 and occurs when client 0 sends its 6th request and injects failure of changing result to hash of OK instead of hash of actual result.
+2nd one triggers at replica 0 and occurs when client 1 sends its 2th request and injects failure of changing operation to get(x) which results in its order statement and result statement using this operation instead of the actual one.
+(2) configuration file  - config_change_operation_change_result_failure.txt
+(3) py -m da -n MainNode --logfile --logfilename logs\log_config_change_operation_change_result_failure_mainnode.txt -F info --message-buffer-size 100000  src\bcr.da config_change_operation_change_result_failure.txt
+    py -m da -n ClientNode --logfile --logfilename logs\log_config_change_operation_change_result_failure_clientnode.txt -F info --message-buffer-size 100000  src\bcr.da config_change_operation_change_result_failure.txt
+(4) log files -
+            logs\log_config_change_operation_change_result_failure_clientnode.txt
+            logs\log_config_change_operation_change_result_failure_mainnode.txt
+(5) outcome - reconfiguration requests will be send for all the failures.
+
+failures[0,1] = result_shuttle(0,5),change_result()
+failures[0,0] = client_request(1,1),change_operation()
+
+Test Case 7:
+(1) 4 clients having mixed workload of pseudorandom and specific requests. There are 3 failures injected -
+1st one triggers at replica 0 and occurs when client 3 sends its 2nd request and injects failure of changing operation to get(x) which results in its order statement and result statement using this operation instead of the actual one.
+2nd one is of the case when 1st forwarded request is received at replica 0 but this situation never occurs in phase 2 because reconfiguration is not supported yet.
+3rd one triggers at replica 3 and occurs when client 0 sends its 2nd request and injects failure of dropping result statement from the shuttle.
+(2) configuration file - config_multiple_clients_multiple_failures.txt
+(3) py -m da -n MainNode --logfile --logfilename logs\log_config_multiple_clients_multiple_failures_mainnode.txt -F info --message-buffer-size 100000  src\bcr.da config_multiple_clients_multiple_failures.txt
+    py -m da -n ClientNode --logfile --logfilename logs\log_config_multiple_clients_multiple_failures_clientnode.txt -F info --message-buffer-size 100000  src\bcr.da config_multiple_clients_multiple_failures.txt
+(4) log files -
+                logs\log_config_multiple_clients_multiple_failures_clientnode.txt
+                logs\log_config_multiple_clients_multiple_failures_mainnode.txt
+(5) outcome - reconfiguration requests will be send for 1st and 3rd failure scenarios.
+
+
+failures[0,0] = client_request(3,1),change_operation(); forwarded_request(0,0),change_operation()
+failures[0,3] = shuttle(0,1),drop_result_stmt()

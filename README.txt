@@ -86,4 +86,4 @@ aggregations- 0
 quantifications- 0
 
 OTHER COMMENTS
-
+Followed coding best practices including code reviews in the development of the code base.
