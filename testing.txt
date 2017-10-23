@@ -8,11 +8,72 @@ each entry should include:
 (5) description of the programmatic check of correctness of content of dictionary (if any),
 (6) the outcome (pass or fail), with a brief explanation of the problem in case of failure.
 
-Test case 1: verify_result_single_client
-(1) only one client having workload = put('movie','star'); append('movie',' wars'); get('movie')
-(2) configuration file- config_result_verify_testcase.txt
-(3) python -m da --logfile --logfilename logs\log_verify_result_single_client.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_testcase.txt
-(4) log file- logs\log_verify_result_single_client.txt
+Test case 1: verify_result_single_client_1
+(1) only one client having workload-
+    workload[0] = put('movie','star'); append('movie',' wars'); slice('movie','3:6'); get('movie')
+    t = 1
+(2) configuration file- config_result_verify_testcase_1.txt
+(3) python -m da --logfile --logfilename logs\log_verify_result_single_client_1.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_testcase_1.txt
+(4) log file- logs\log_verify_result_single_client_1.txt
 (5) a dictionary is maintained at client. The result for operation on dictionary at client
-    is compared with result received from replica.
-(6) outcome- pass
+    is compared with result received from replica. The count of correct results received is
+    maintained at client and if it is 4 the result is PASS otherwise it is FAIL.
+(6) outcome- PASS
+
+Test case 2: verify_result_single_client_2
+(1) only one client having workload-
+    workload[0] = put('movie','star'); append('movie',' wars'); slice('movie','3:6'); get('movie')
+    t = 2
+(2) configuration file- config_result_verify_testcase.txt
+(3) python -m da --logfile --logfilename logs\log_verify_result_single_client_2.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_testcase_2.txt
+(4) log file- logs\log_verify_result_single_client_2.txt
+(5) a dictionary is maintained at client. The result for operation on dictionary at client
+    is compared with result received from replica. The count of correct results received is
+    maintained at client and if it is 4 the result is PASS otherwise it is FAIL.
+(6) outcome- PASS
+
+Test case 3: client_timeout_testcase_1
+(1) only one client having workload-
+    workload[0] = put('movie','star'); append('movie',' wars'); slice('movie','3:6'); get('movie')
+    client timeout at 0ms. t = 1
+(2) configuration file- config_client_timeout_testcase_1.txt
+(3) python -m da --logfile --logfilename logs\log_client_timeout_1.txt -F info --message-buffer-size 100000  src\bcr.da config_client_timeout_testcase_1.txt
+(4) log file- logs\log_client_timeout_1.txt
+(5) a dictionary is maintained at client. The result for operation on dictionary at client
+    is compared with result received from replica. The count of correct results received is
+    maintained at client and if it is 4 the result is PASS otherwise it is FAIL.
+(6) outcome- PASS
+
+Test case 4: client_timeout_testcase_2
+(1) only one client having workload
+    workload[0] = put('movie','star'); append('movie',' wars'); slice('movie','3:6'); get('movie')
+    client timeout at 0ms. t = 2
+(2) configuration file- config_client_timeout_testcase_2.txt
+(3) python -m da --logfile --logfilename logs\log_client_timeout_2.txt -F info --message-buffer-size 100000  src\bcr.da config_client_timeout_testcase_2.txt
+(4) log file- logs\log_client_timeout_2.txt
+(5) a dictionary is maintained at client. The result for operation on dictionary at client
+    is compared with result received from replica. The count of correct results received is
+    maintained at client and if it is 4 the result is PASS otherwise it is FAIL.
+(6) outcome- PASS
+
+Test case 5: verify_result_single_client_pseudorandom_testcase_1
+(1) only one client having workload = pseudorandom(255,250)
+(2) configuration file- config_pseudorandom_result_verify_testcase_1.txt
+(3) python -m da --logfile --logfilename logs\log_verify_result_single_client_pseudorandom_testcase_1.txt -F info --message-buffer-size 100000  src\bcr.da config_result_verify_pseudorandom_testcase_1.txt
+(4) log file- logs\log_verify_result_single_client_pseudorandom_testcase_1.txt
+(5) a dictionary is maintained at client. The result for operation on dictionary at client
+    is compared with result received from replica. The count of correct results received is
+    maintained at client and if it is 250 the result is PASS otherwise it is FAIL.
+(6) outcome- PASS
+
+Test case 6: verify_result_multi_client_1
+(1) two clients
+    workload[0] = put('movie','star'); append('movie',' wars'); slice('movie','3:6'); get('movie')
+    workload[1] = put('jedi,'luke skywalker'); get('jedi')
+(2) configuration file- config_multiclient_result_verify_testcase_1.txt
+(3) python -m da --logfile --logfilename logs\log_config_multiclient_result_verify_testcase_1.txt -F info --message-buffer-size 100000  src\bcr.da config_multiclient_result_verify_testcase_1.txt
+(4) log file- logs\log_config_multiclient_result_verify_testcase_1.txt
+(5) a dictionary is maintained at client. The result for operation on dictionary at client
+    is compared with result received from replica. In the end both clients sends a get request to replica to verify the
+    result by comparing it with the result calculated at client.
+(6) outcome- PASS

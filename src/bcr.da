@@ -16,7 +16,11 @@ client_module = import_da('client')
 
 
 def main():
-    config_file = 'config2.txt'
+
+    if len(sys.argv) > 1:
+        config_file = sys.argv[1]
+    else:
+        config_file = 'config2.txt'
 
     """ reading config from file """
     config = {}

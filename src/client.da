@@ -24,6 +24,7 @@ class Client(process):
         self.result_count = 0
         self.result_recd_from_replica = None
         self.olympus_pub_key = None
+        self.replica_state_obj = None
         output("client setup completed", level=logging.DEBUG)
 
     def receive(msg= ('all_crypto_keys', olympus_public_key,
@@ -61,6 +62,10 @@ class Client(process):
 
         self.result_recd_from_replica = result
         output('received result for request id', request_id, result, level=logging.INFO)
+
+    def receive(msg= ('state_object', obj)):
+        output('received state object-', obj)
+        self.replica_state_obj = obj
 
     def send_request(request_id, request, is_retrasmitted, recipient):
         output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
@@ -123,6 +128,7 @@ class Client(process):
 
         return count >= (t+1)
 
+
     def run():
         output("waiting for olympus to contact...", level=logging.INFO)
         await(self.olympus is not None)
@@ -149,8 +155,25 @@ class Client(process):
         await(received(('done')))
         output('client run finished!')
 
+    def get_state_obj():
+        send(('get_state_obj'), to=self.head)
+        await(self.replica_state_obj is not None)
+
     def testing():
-        # Testing
+        ''' This function verifies the content of dictionary at the end of the test cases '''
+        get_state_obj() # get the state object fro the head
+        # compare the contents of the dictionary at client and the dictionary
+        # sent from replica for every key.
+        for key in self.state_object.state:
+            if key in self.replica_state_obj.state:
+                if self.state_object.state[key] == self.replica_state_obj.state[key]:
+                    output('object at replica and client match for key-',key, 'value-',
+                           self.replica_state_obj.state[key],level= logging.INFO)
+                else:
+                    output('object at replica and client do not match for key-', key, level= logging.INFO)
+            else:
+                output('key',key, 'not present at client-', self.client_id, level= logging.INFO)
+
         if self.test_case.startswith('verify_result_single_client') \
                 or self.test_case.startswith('client_timeout_testcase'):
             output('Number of correct results received at client-', self.result_count)
