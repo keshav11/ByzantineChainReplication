@@ -164,15 +164,19 @@ class Client(process):
         get_state_obj() # get the state object fro the head
         # compare the contents of the dictionary at client and the dictionary
         # sent from replica for every key.
+        num_key_matches = 0
         for key in self.state_object.state:
             if key in self.replica_state_obj.state:
                 if self.state_object.state[key] == self.replica_state_obj.state[key]:
                     output('object at replica and client match for key-',key, 'value-',
                            self.replica_state_obj.state[key],level= logging.INFO)
+                    num_key_matches+=1
                 else:
                     output('object at replica and client do not match for key-', key, level= logging.INFO)
             else:
                 output('key',key, 'not present at client-', self.client_id, level= logging.INFO)
+
+        output('number of matches for keys between dictionary at client and replica-', num_key_matches)
 
         if self.test_case.startswith('verify_result_single_client') \
                 or self.test_case.startswith('client_timeout_testcase'):

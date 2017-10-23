@@ -69,7 +69,7 @@ class Object:
             return_val = self.slice(key_val[0].strip().strip('\''),
                               key_val[1].strip().strip('\''))
 
-        self.print_obj()
+        #self.print_obj()
         return return_val
 
 def main():
