@@ -14,11 +14,12 @@ class Olympus(process):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.configuration = []  # current configuration
-        self.replica_ids = []
+        self.replica_map = {}
         self.configuration_number = 0
         self.crypto_keys = None
         self.wedged_statements = []
         self.t = t
+        self.caught_up_messages = []
         self.reconfiguration_in_process = False
 
     def sign(data):
@@ -46,14 +47,20 @@ class Olympus(process):
         v_key_hex = v_key.encode(encoder=nacl.encoding.HexEncoder)
         return (s_key, v_key_hex)
 
+    def get_decoded_msg(signed_msg):
+        return ast.literal_eval(signed_msg.message.decode())
+
     def receive(msg=('get_config'), from_= client):
         send(('config', self.configuration, self.configuration_number), to=client)
+
+    def get_decoded_msg(signed_msg):
+        return ast.literal_eval(signed_msg.message.decode())
 
     def receive(msg=('wedge-statement', wedged_stmnt), from_=sender):
         # send(('wedge-statement', sign((self.replica_id, self.history, self.last_checkpoint_proof))), to=self.olympus)
         output('received wedge statement from ', sender, level=logging.INFO)
         # TODO: sign
-        #decoded_req = ast.literal_eval(wedged_stmnt.message.decode())
+        #decoded_req = a
         #if not verify(wedged_stmnt, decoded_req[0]):
         #    output('signature verification failed for wedge statement from', level=logging.INFO)
         #    return
@@ -65,6 +72,14 @@ class Olympus(process):
 
         output('length!!!!!!!!',len(self.wedged_statements))
 
+    def receive(msg=('caught_up', caught_up_message), from_=sender):
+        output('received caught up from ', sender, level=logging.INFO)
+        decoded_msg = get_decoded_msg(caught_up_message)
+        if not verify(caught_up_message, decoded_msg[0]):
+            output('signature verification failed for caught up message from', sender, level=logging.WARNING)
+        else:
+            output('caught up message,', decoded_msg)
+            self.caught_up_messages.append(decoded_msg)
 
     def receive(msg=('reconfiguration-request', proof_of_misbehaviour, sender_id), from_= sender):
         # if sender is not in current configuration and the proof of misbehaviour is
@@ -72,7 +87,7 @@ class Olympus(process):
         output('received reconfiguration request from ', sender, level=logging.INFO)
         if reconfiguration_in_process: return
         reconfiguration_in_process = True
-        if sender_id not in self.replica_ids and (proof_of_misbehaviour == None or not
+        if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
             check_proof_of_misbehaviour(proof_of_misbehaviour)):
             output('reconfiguration request not valid.', level=logging.INFO)
             return  # ignore request
@@ -87,18 +102,50 @@ class Olympus(process):
         while not valid_quorum:
             permutations = itertools.permutations(self.wedged_statements, t+1)
             for quorum_candidate in permutations:
-                output(len(self.wedged_statements))
                 output('qc',len(quorum_candidate))
+                if is_history_consistent(quorum_candidate):
+                    quorum = quorum_candidate
+                else:
+                    continue
+                longest_history = []
+                longest_history_replica_id = ""
+                for wdge_stmnt in quorum:
+                    if len(wdge_stmnt[1]) > len(longest_history):
+                        longest_history = wdge_stmnt[1]
+                        longest_history_replica_id = wdge_stmnt[0]
+                output(type(longest_history))
+                output(longest_history_replica_id)
+                longest_history_len = len(longest_history)
+                for wedge_stmnt in quorum:
+                    replica_id = wedge_stmnt[0]
+                    replica_hist = list(filter(lambda a: a[0] == replica_id, quorum))[0][1]
+                    replica_hist_len = len(replica_hist)
+                    output('replica', replica_id, 'history is', replica_hist, 'of len',
+                           replica_hist_len , level=logging.INFO)
+                    output('sending catch_up request to ', replica_id, level=logging.INFO)
+                    output('sending history to catch up', longest_history[replica_hist_len:], level=logging.INFO)
+                    send(('catch_up', longest_history[replica_hist_len:]), to=self.replica_map[replica_id])
+
+                await(len(self.caught_up_messages) == len(quorum))
+                output('received', len(quorum), 'caught up messages', level=logging.INFO)
+                valid_quorum = True
                 time.sleep(1)
                 if valid_quorum: break
             # check if new wedged statements have arrived
             -- wedgestatements
 
-        output('!!!!!!!!! out of loop', )
+        output('out of the loop')
+
+
+
 
         # reset
-        #reconfiguration_in_process = False
-        #self.wedged_statements = []
+        # reconfiguration_in_process = False
+        # self.wedged_statements = []
+        # self.num_caught_up_messages = 0
+
+    def is_history_consistent(quorum_candidate):
+        return True
 
     def check_proof_of_misbehaviour(proof_of_misbehaviour):
         return True
@@ -142,7 +189,7 @@ class Olympus(process):
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
                         clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]], num=1)
             self.configuration.append(replica)
-            self.replica_ids.append(replica_id)
+            self.replica_map[replica_id] = replica
             start(replica)
 
         """send public keys and config to replica"""

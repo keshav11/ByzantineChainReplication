@@ -72,7 +72,7 @@ class Replica(process):
 
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
-
+            
     def print_state_object():
         for key in self.state_object.state:
             output(key, '->', self.state_object.state[key], level=logging.INFO)
@@ -106,12 +106,18 @@ class Replica(process):
         self.olympus = olympus
         output('signature verification successful for inithist from olympus', level=logging.INFO)
 
-
     def receive(msg=('wedge-request'), from_=sender):
         output('received wedge request from olympus', level=logging.INFO)
         self.mode = Modes.IMMUTABLE
         send(('wedge-statement', (self.replica_id, self.history, self.last_checkpoint_proof)), to=self.olympus)
 
+    def receive(msg=('catch_up', hist_suffix), from_=sender):
+        output('received catch up message from olympus', level=logging.INFO)
+        for order_statement in hist_suffix:
+            request = order_statement[2]
+            output('applying request:', request, level=logging.INFO)
+            result = self.state_object.evaluate_request(request)
+        send(('caught_up', sign(crypto_hash(self.state_object))), to=self.olympus)
 
     def receive(msg=('config', config, config_no)):
         self.configuration = config
