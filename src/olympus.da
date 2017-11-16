@@ -4,15 +4,22 @@ import nacl.encoding
 import nacl.hash
 import nacl.exceptions
 import logging
-
+import ast
+import random
+import time
+import itertools
 
 class Olympus(process):
-    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout):
+    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, t):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.configuration = []  # current configuration
+        self.replica_ids = []
         self.configuration_number = 0
         self.crypto_keys = None
+        self.wedged_statements = []
+        self.t = t
+        self.reconfiguration_in_process = False
 
     def sign(data):
         return crypto_keys[0].sign(str(data).encode('utf-8'))
@@ -42,12 +49,69 @@ class Olympus(process):
     def receive(msg=('get_config'), from_= client):
         send(('config', self.configuration, self.configuration_number), to=client)
 
-    def run():
+    def receive(msg=('wedge-statement', wedged_stmnt), from_=sender):
+        # send(('wedge-statement', sign((self.replica_id, self.history, self.last_checkpoint_proof))), to=self.olympus)
+        output('received wedge statement from ', sender, level=logging.INFO)
+        # TODO: sign
+        #decoded_req = ast.literal_eval(wedged_stmnt.message.decode())
+        #if not verify(wedged_stmnt, decoded_req[0]):
+        #    output('signature verification failed for wedge statement from', level=logging.INFO)
+        #    return
+        #else:
+        decoded_req = wedged_stmnt
+        history =  decoded_req[1]
+        last_checkpoint_proof = decoded_req[2]
+        self.wedged_statements.append(wedged_stmnt)
+
+        output('length!!!!!!!!',len(self.wedged_statements))
+
+
+    def receive(msg=('reconfiguration-request', proof_of_misbehaviour, sender_id), from_= sender):
+        # if sender is not in current configuration and the proof of misbehaviour is
+        # invalid, ignore
+        output('received reconfiguration request from ', sender, level=logging.INFO)
+        if reconfiguration_in_process: return
+        reconfiguration_in_process = True
+        if sender_id not in self.replica_ids and (proof_of_misbehaviour == None or not
+            check_proof_of_misbehaviour(proof_of_misbehaviour)):
+            output('reconfiguration request not valid.', level=logging.INFO)
+            return  # ignore request
+        for replica in self.configuration:
+            output('sending wedge request to ', replica, level=logging.INFO)
+            send(('wedge-request'), to=replica)
+        output(t)
+        await(len(self.wedged_statements) >= (t+1))
+        output('at least t+1 wedged statememnts received.-', len(self.wedged_statements))
+        valid_quorum = False
+
+        while not valid_quorum:
+            permutations = itertools.permutations(self.wedged_statements, t+1)
+            for quorum_candidate in permutations:
+                output(len(self.wedged_statements))
+                output('qc',len(quorum_candidate))
+                time.sleep(1)
+                if valid_quorum: break
+            # check if new wedged statements have arrived
+            -- wedgestatements
+
+        output('!!!!!!!!! out of loop', )
+
+        # reset
+        #reconfiguration_in_process = False
+        #self.wedged_statements = []
+
+    def check_proof_of_misbehaviour(proof_of_misbehaviour):
+        return True
+
+    def create_configuration():
         """ creating num_replica replicas """
         self.crypto_keys = generate_keys()
         start_replicas()
         register_to_clients()
         send_client_public_keys_to_replicas()
+
+    def run():
+        create_configuration()
         # wait till done not received
         await(received(('done')))
         output('olympus run finished!')
@@ -78,6 +142,7 @@ class Olympus(process):
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
                         clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]], num=1)
             self.configuration.append(replica)
+            self.replica_ids.append(replica_id)
             start(replica)
 
         """send public keys and config to replica"""
