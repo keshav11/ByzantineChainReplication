@@ -25,15 +25,13 @@ class Replica(process):
 
     def setup(replica_id:str, position:int, crypto_keys:tuple,
               clients, failure_scenarios, timeout, olympus_pub_key, obj):
-        output('@@@@@@@@@@@@@@@@@@@@@@', obj)
+
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         if obj is None:
             self.state_object = Object()
-            output('@@@@@@@@@@@@@@@@@@@@@@', obj)
         else:
             self.state_object = obj
-            output('!!!!!!!!!!!!!!!!!!!!!!!!', obj)
         self.history = []
         self.olympus = None
         self.mode = Modes.PENDING

@@ -55,7 +55,7 @@ class Olympus(process):
         return ast.literal_eval(signed_msg.message.decode())
 
     def receive(msg=('get_config'), from_= client):
-        send(('config', self.configuration, self.configuration_number), to=client)
+        send(('config', self.configuration, self.configuration_number, self.all_replicas_public_keys), to=client)
 
     def get_decoded_msg(signed_msg):
         return ast.literal_eval(signed_msg.message.decode())
@@ -193,12 +193,12 @@ class Olympus(process):
 
     def create_configuration(state_obj=None):
         """ creating num_replica replicas """
-        self.crypto_keys = generate_keys()
         start_replicas(state_obj)
-        register_to_clients()
         send_client_public_keys_to_replicas()
 
     def run():
+        self.crypto_keys = generate_keys()
+        register_to_clients()
         create_configuration()
         # wait till done not received
         await(received(('done')))

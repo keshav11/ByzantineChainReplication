@@ -35,9 +35,10 @@ class Client(process):
         self.crypto_keys = client_crypto_keys
         self.all_replicas_public_keys = all_replicas_public_keys
 
-    def receive(msg= ('config', configuration, configuration_number)):
+    def receive(msg= ('config', configuration, configuration_number, all_replicas_public_keys)):
         output('received config from olympus', level=logging.INFO)
         self.configuration = configuration
+        self.all_replicas_public_keys = all_replicas_public_keys
         self.configuration_number = configuration_number
         self.head = self.configuration[0]
         self.tail = self.configuration[-1]
@@ -73,6 +74,7 @@ class Client(process):
         send(('request', signed_request), to=recipient)
 
     def fetch_config():
+        self.configuration = None
         send(('get_config'), to=self.olympus)
         await(self.configuration is not None)
 
