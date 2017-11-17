@@ -116,7 +116,6 @@ class Olympus(process):
         while not valid_quorum:
             permutations = itertools.permutations(self.wedged_statements, t+1)
             for quorum_candidate in permutations:
-                output('qc',len(quorum_candidate))
                 if is_history_consistent(quorum_candidate):
                     quorum = quorum_candidate
                 else:
@@ -139,7 +138,7 @@ class Olympus(process):
                     output('sending catch_up request to ', replica_id, level=logging.INFO)
                     output('sending history to catch up', longest_history[replica_hist_len:], level=logging.INFO)
                     send(('catch_up', longest_history[replica_hist_len:]), to=self.replica_map[replica_id])
-
+                    # TODO: checkpoint proof
                 await(len(self.caught_up_messages) == len(quorum))
                 output('received', len(quorum), 'caught up messages', level=logging.INFO)
                 # check if hash in caught_up_messages are same
@@ -176,6 +175,22 @@ class Olympus(process):
         self.wedged_statements = []
         self.replica_running_state = None
 
+    def is_history_consistent(wedged_statements):
+        output('checking consistency of wedged_statements', wedged_statements, level=logging.INFO)
+        for w1 in wedged_statements:
+            for w2 in wedged_statements:
+                if w1 == w2:
+                    continue
+                for slot in range(0, min(len(w1[1]), len(w2[1]))):
+                    if w1[1][slot][2] != w2[1][slot][2]:
+                        output('history inconsistent', level=logging.INFO)
+                        return False
+            # TODO: check validity of checkpoint proof
+        return  True
+
+    def check_proof_of_misbehaviour(proof_of_misbehaviour):
+        return True
+
     def terminate_all_replicas():
         for replica in self.configuration:
             send(('done'), to=replica)
@@ -185,11 +200,7 @@ class Olympus(process):
         self.configuration = []  # current configuration
         self.replica_map = {}
 
-    def is_history_consistent(quorum_candidate):
-        return True
 
-    def check_proof_of_misbehaviour(proof_of_misbehaviour):
-        return True
 
     def create_configuration(state_obj=None):
         """ creating num_replica replicas """
