@@ -20,6 +20,7 @@ class Olympus(process):
         self.wedged_statements = []
         self.t = t
         self.caught_up_messages = []
+        self.replica_running_state = None
         self.reconfiguration_in_process = False
 
     def sign(data):
@@ -39,6 +40,9 @@ class Olympus(process):
 
         output('signature verified', level=logging.DEBUG)
         return True
+
+    def crypto_hash(data):
+        return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
 
     def generate_keys():
         """TODO: genererate keys"""
@@ -70,16 +74,26 @@ class Olympus(process):
         last_checkpoint_proof = decoded_req[2]
         self.wedged_statements.append(wedged_stmnt)
 
-        output('length!!!!!!!!',len(self.wedged_statements))
-
     def receive(msg=('caught_up', caught_up_message), from_=sender):
-        output('received caught up from ', sender, level=logging.INFO)
+        output('received caught up message from ', sender, level=logging.INFO)
         decoded_msg = get_decoded_msg(caught_up_message)
         if not verify(caught_up_message, decoded_msg[0]):
             output('signature verification failed for caught up message from', sender, level=logging.WARNING)
         else:
             output('caught up message,', decoded_msg)
             self.caught_up_messages.append(decoded_msg)
+            # TODO: do the sending of pending result to client
+
+    def receive(msg=('running_state', running_state), from_=sender):
+        output('received running state from ', sender, level=logging.INFO)
+        self.replica_running_state = running_state[1]
+        # decoded_msg = get_decoded_msg(running_state)
+        # if not verify(running_state, decoded_msg[0]):
+        #     output('signature verification failed for running state message from', sender, level=logging.WARNING)
+        # else:
+        #     output('running state message,', decoded_msg)
+        #     self.replica_running_state = decoded_msg[1]
+
 
     def receive(msg=('reconfiguration-request', proof_of_misbehaviour, sender_id), from_= sender):
         # if sender is not in current configuration and the proof of misbehaviour is
@@ -88,7 +102,7 @@ class Olympus(process):
         if reconfiguration_in_process: return
         reconfiguration_in_process = True
         if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
-            check_proof_of_misbehaviour(proof_of_misbehaviour)):
+        check_proof_of_misbehaviour(proof_of_misbehaviour)):
             output('reconfiguration request not valid.', level=logging.INFO)
             return  # ignore request
         for replica in self.configuration:
@@ -98,7 +112,7 @@ class Olympus(process):
         await(len(self.wedged_statements) >= (t+1))
         output('at least t+1 wedged statememnts received.-', len(self.wedged_statements))
         valid_quorum = False
-
+        quorum = []
         while not valid_quorum:
             permutations = itertools.permutations(self.wedged_statements, t+1)
             for quorum_candidate in permutations:
@@ -128,21 +142,48 @@ class Olympus(process):
 
                 await(len(self.caught_up_messages) == len(quorum))
                 output('received', len(quorum), 'caught up messages', level=logging.INFO)
+                # check if hash in caught_up_messages are same
                 valid_quorum = True
-                time.sleep(1)
+                hash_val = self.caught_up_messages[0][1]
+                for caught_up_msg in self.caught_up_messages:
+                    if not caught_up_msg[1] == hash_val:
+                        output('hash of state object do not match for ', caught_up_msg[0], level=logging.INFO)
+                        valid_quorum = False
+                        break
                 if valid_quorum: break
             # check if new wedged statements have arrived
             -- wedgestatements
 
-        output('out of the loop')
+        output('valid quorum obtained-', quorum)
 
+        hash_val = self.caught_up_messages[0][1]
+        for wedge_stmnt in quorum:
+            replica_id = wedge_stmnt[0]
+            output('sending get_running state msg to ', replica_id, level=logging.INFO)
+            send(('get_running_state'), to=self.replica_map[replica_id])
+            await(self.replica_running_state is not None)
+            if crypto_hash(self.replica_running_state) == hash_val:
+                break
+            else:
+                self.replica_running_state = None
 
-
-
+        terminate_all_replicas()
+        output('running state', self.replica_running_state)
+        create_configuration(self.replica_running_state)
+        self.configuration_number += 1
         # reset
-        # reconfiguration_in_process = False
-        # self.wedged_statements = []
-        # self.num_caught_up_messages = 0
+        self.reconfiguration_in_process = False
+        self.wedged_statements = []
+        self.replica_running_state = None
+
+    def terminate_all_replicas():
+        for replica in self.configuration:
+            send(('done'), to=replica)
+            send(('terminate'), to=replica)
+        self.configuration = []
+        self.all_replicas_public_keys = {}
+        self.configuration = []  # current configuration
+        self.replica_map = {}
 
     def is_history_consistent(quorum_candidate):
         return True
@@ -150,10 +191,10 @@ class Olympus(process):
     def check_proof_of_misbehaviour(proof_of_misbehaviour):
         return True
 
-    def create_configuration():
+    def create_configuration(state_obj=None):
         """ creating num_replica replicas """
         self.crypto_keys = generate_keys()
-        start_replicas()
+        start_replicas(state_obj)
         register_to_clients()
         send_client_public_keys_to_replicas()
 
@@ -175,7 +216,7 @@ class Olympus(process):
             send(('all_crypto_keys', self.crypto_keys[1],
                   key_pair, self.all_replicas_public_keys), to=clients[cnt_id])
 
-    def start_replicas():
+    def start_replicas(state_obj):
         """start num_replicas replicas"""
         output("starting replicas...", level=logging.INFO)
         for itr in range(num_replica):
@@ -187,7 +228,7 @@ class Olympus(process):
             else:
                 timeout = self.nonhead_timeout
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
-                        clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]], num=1)
+                                                   clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1], state_obj], num=1)
             self.configuration.append(replica)
             self.replica_map[replica_id] = replica
             start(replica)

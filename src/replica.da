@@ -6,7 +6,7 @@ import nacl.encoding
 import nacl.hash
 import nacl.exceptions
 import ast
-
+import sys
 
 class Failure_Scenarios(Enum):
     CLIENT_REQUEST = "client_request"
@@ -24,10 +24,16 @@ class Modes(Enum):
 class Replica(process):
 
     def setup(replica_id:str, position:int, crypto_keys:tuple,
-              clients, failure_scenarios, timeout, olympus_pub_key):
+              clients, failure_scenarios, timeout, olympus_pub_key, obj):
+        output('@@@@@@@@@@@@@@@@@@@@@@', obj)
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
-        self.state_object = Object()
+        if obj is None:
+            self.state_object = Object()
+            output('@@@@@@@@@@@@@@@@@@@@@@', obj)
+        else:
+            self.state_object = obj
+            output('!!!!!!!!!!!!!!!!!!!!!!!!', obj)
         self.history = []
         self.olympus = None
         self.mode = Modes.PENDING
@@ -72,7 +78,7 @@ class Replica(process):
 
     def crypto_hash(data):
         return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
-            
+
     def print_state_object():
         for key in self.state_object.state:
             output(key, '->', self.state_object.state[key], level=logging.INFO)
@@ -117,7 +123,15 @@ class Replica(process):
             request = order_statement[2]
             output('applying request:', request, level=logging.INFO)
             result = self.state_object.evaluate_request(request)
-        send(('caught_up', sign(crypto_hash(self.state_object))), to=self.olympus)
+        send(('caught_up', sign((self.replica_id, crypto_hash(self.state_object)))), to=self.olympus)
+
+    def receive(msg=('terminate'), from_=sender):
+        output('received terminate message from olympus', level=logging.INFO)
+        sys.exit()
+
+    def receive(msg=('get_running_state'), from_=sender):
+        output('received get running state message from olympus', level=logging.INFO)
+        send(('running_state', (self.replica_id, self.state_object)), to=self.olympus)
 
     def receive(msg=('config', config, config_no)):
         self.configuration = config
