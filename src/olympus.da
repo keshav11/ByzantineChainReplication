@@ -78,7 +78,7 @@ class Olympus(process):
         output('received caught up message from ', sender, level=logging.INFO)
         decoded_msg = get_decoded_msg(caught_up_message)
         if not verify(caught_up_message, decoded_msg[0]):
-            output('signature verification failed for caught up message from', sender, level=logging.WARNING)
+            output('signature verification failed for caught up message from', sender, level=logging.CRITICAL)
         else:
             output('caught up message,', decoded_msg)
             self.caught_up_messages.append(decoded_msg)
@@ -108,7 +108,6 @@ class Olympus(process):
         for replica in self.configuration:
             output('sending wedge request to ', replica, level=logging.INFO)
             send(('wedge-request'), to=replica)
-        output(t)
         await(len(self.wedged_statements) >= (t+1))
         output('at least t+1 wedged statememnts received.-', len(self.wedged_statements))
         valid_quorum = False
@@ -117,8 +116,10 @@ class Olympus(process):
             permutations = itertools.permutations(self.wedged_statements, t+1)
             for quorum_candidate in permutations:
                 if is_history_consistent(quorum_candidate):
+                    output('consistent quorum', level=logging.INFO)
                     quorum = quorum_candidate
                 else:
+                    output('inconsistent quorum. taking a different quorum', level=logging.INFO)
                     continue
                 longest_history = []
                 longest_history_replica_id = ""
@@ -146,14 +147,14 @@ class Olympus(process):
                 hash_val = self.caught_up_messages[0][1]
                 for caught_up_msg in self.caught_up_messages:
                     if not caught_up_msg[1] == hash_val:
-                        output('hash of state object do not match for ', caught_up_msg[0], level=logging.INFO)
+                        output('hash of state object do not match for ', caught_up_msg[0], level=logging.CRITICAL)
                         valid_quorum = False
                         break
                 if valid_quorum: break
             # check if new wedged statements have arrived
             -- wedgestatements
 
-        output('valid quorum obtained-', quorum)
+        output('valid quorum obtained-', quorum, level=logging.INFO)
 
         hash_val = self.caught_up_messages[0][1]
         for wedge_stmnt in quorum:
@@ -167,7 +168,7 @@ class Olympus(process):
                 self.replica_running_state = None
 
         terminate_all_replicas()
-        output('running state', self.replica_running_state)
+        output('running state', self.replica_running_state, level=logging.INFO)
         create_configuration(self.replica_running_state)
         self.configuration_number += 1
         # reset
@@ -177,16 +178,38 @@ class Olympus(process):
 
     def is_history_consistent(wedged_statements):
         output('checking consistency of wedged_statements', wedged_statements, level=logging.INFO)
+        # checking order proofs in each wedge statements
+        for wedged_statement in wedged_statements:
+            for order_proof in wedged_statement[1]:
+                if not is_order_proof_valid(order_proof):
+                    return False
+
         for w1 in wedged_statements:
             for w2 in wedged_statements:
                 if w1 == w2:
                     continue
                 for slot in range(0, min(len(w1[1]), len(w2[1]))):
                     if w1[1][slot][2] != w2[1][slot][2]:
-                        output('history inconsistent', level=logging.INFO)
+                        output('history inconsistent', level=logging.WARNING)
                         return False
             # TODO: check validity of checkpoint proof
         return  True
+
+    def is_order_proof_valid(order_proof):
+        # order_proof - (self.slot, request_id, request, self, self.configuration,
+        #                   [signed_order_statement])
+        request = order_proof[2]
+        # verify order proof for preceding replicas
+        for ord_stmnt in order_proof[5]:
+            # get replica id from order_statement
+            decoded_message = ast.literal_eval(ord_stmnt.message.decode())
+            rplca_id = decoded_message[3]
+            request_from_order_statement = decoded_message[2]
+            if not verify(ord_stmnt, rplca_id) or request_from_order_statement != request:
+                output('order proof validation failed for replica', rplca_id, level=logging.CRITICAL)
+                return False
+
+        return True
 
     def check_proof_of_misbehaviour(proof_of_misbehaviour):
         return True

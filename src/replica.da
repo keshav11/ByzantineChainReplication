@@ -224,7 +224,7 @@ class Replica(process):
 
     # message handler for receiving shuttle going forward in the chain
     def receive(msg=('shuttle', shuttle), from_=predeccessor):
-        output('received shuttle', shuttle, 'from', predeccessor, level=logging.DEBUG) # TODO: INFO
+        output('received shuttle', shuttle, 'from', predeccessor, level=logging.INFO) # TODO: INFO
         self.slot = shuttle[0][0]
         request_id = shuttle[0][1]
         request = shuttle[0][2]
@@ -273,7 +273,7 @@ class Replica(process):
 
     # message handler for receiving result shuttle going backward in the chain
     def receive(msg= ('result_shuttle', result, shuttle), from_=successor):
-        output('received result shuttle', shuttle, 'from', successor, level=logging.DEBUG) # TODO: info
+        output('received result shuttle', shuttle, 'from', successor, level=logging.INFO) # TODO: info
         if not is_result_shuttle_valid(result, shuttle):
             output('shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
