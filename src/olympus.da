@@ -4,18 +4,28 @@ import nacl.encoding
 import nacl.hash
 import nacl.exceptions
 import logging
-
+import ast
+import random
+import time
+import itertools
+import pickle
 
 class Olympus(process):
-    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout):
+    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, t):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.configuration = []  # current configuration
+        self.replica_map = {}
         self.configuration_number = 0
         self.crypto_keys = None
+        self.wedged_statements = []
+        self.t = t
+        self.caught_up_messages = []
+        self.replica_running_state = None
+        self.reconfiguration_in_process = False
 
     def sign(data):
-        return crypto_keys[0].sign(str(data).encode('utf-8'))
+        return crypto_keys[0].sign(str(data).encode())
 
     def verify(data, id=None, type="replica"):
         if type == "replica":
@@ -32,6 +42,9 @@ class Olympus(process):
         output('signature verified', level=logging.DEBUG)
         return True
 
+    def crypto_hash(data):
+        return nacl.hash.sha256(data.encode(), encoder=nacl.encoding.HexEncoder)
+
     def generate_keys():
         """TODO: genererate keys"""
         s_key = nacl.signing.SigningKey.generate()
@@ -40,20 +53,215 @@ class Olympus(process):
         return (s_key, v_key_hex)
 
     def receive(msg=('get_config'), from_= client):
-        send(('config', self.configuration, self.configuration_number), to=client)
+        send(('config', self.configuration, self.configuration_number, self.all_replicas_public_keys), to=client)
+
+    def get_decoded_msg(signed_msg):
+        return ast.literal_eval(signed_msg.message.decode())
+
+    def receive(msg=('wedge_statement', wedged_stmnt), from_=sender):
+        # send(('wedge_statement', sign((self.replica_id, self.history, self.last_checkpoint_proof))), to=self.olympus)
+        output('received wedge statement from ', sender, level=logging.INFO)
+        decoded_req = pickle.loads(get_decoded_msg(wedged_stmnt))
+        if not verify(wedged_stmnt, decoded_req[0]):
+           output('signature verification failed for wedge statement from', level=logging.INFO)
+           return
+        else:
+            self.wedged_statements.append(decoded_req)
+
+    def receive(msg=('caught_up', caught_up_message), from_=sender):
+        output('received caught up message from ', sender, level=logging.INFO)
+        decoded_msg = get_decoded_msg(caught_up_message)
+        if not verify(caught_up_message, decoded_msg[0]):
+            output('signature verification failed for caught up message from', sender, level=logging.CRITICAL)
+        else:
+            output('caught up message received-', decoded_msg, level=logging.INFO)
+            self.caught_up_messages.append(decoded_msg)
+
+    def receive(msg=('running_state', running_state), from_=sender):
+        output('received running state from ', sender, level=logging.INFO)
+        decoded_msg = pickle.loads(get_decoded_msg(running_state))
+        if not verify(running_state, decoded_msg[0]):
+            output('signature verification failed for running state message from', sender, level=logging.WARNING)
+        else:
+            output('running state message received', decoded_msg, level=logging.INFO)
+            self.replica_running_state = decoded_msg[1]
+
+
+    def receive(msg=('reconfiguration_request', proof_of_misbehaviour, sender_id), from_= sender):
+        # if sender is not in current configuration and the proof of misbehaviour is
+        # invalid, ignore
+        output('received reconfiguration request from ', sender, level=logging.INFO)
+        if reconfiguration_in_process: return
+        if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
+        check_proof_of_misbehaviour(proof_of_misbehaviour)):
+            output('reconfiguration request not valid.', level=logging.INFO)
+            return  # ignore request
+        reconfiguration_in_process = True
+        for replica in self.configuration:
+            output('sending wedge request to ', replica, level=logging.INFO)
+            send(('wedge_request'), to=replica)
+        await(len(self.wedged_statements) >= (t+1))
+        output('at least t+1 wedged statememnts received. number of wedged statements received-', len(self.wedged_statements), level=logging.INFO)
+        valid_quorum = False
+        quorum = []
+        while not valid_quorum:
+            permutations = itertools.permutations(self.wedged_statements, t+1)
+            for quorum_candidate in permutations:
+                if is_history_consistent(quorum_candidate):
+                    output('consistent quorum obtained', level=logging.INFO)
+                    quorum = quorum_candidate
+                else:
+                    output('quorum candidate is not consistent. taking a different quorum', level=logging.INFO)
+                    continue
+                longest_history = []
+                longest_history_replica_id = ""
+                for wdge_stmnt in quorum:
+                    if len(wdge_stmnt[1]) > len(longest_history):
+                        longest_history = wdge_stmnt[1]
+                        longest_history_replica_id = wdge_stmnt[0]
+                longest_history_len = len(longest_history)
+                for wedge_stmnt in quorum:
+                    self.caught_up_messages = [] # empty it
+                    replica_id = wedge_stmnt[0]
+                    #replica_hist = list(filter(lambda a: a[0] == replica_id, quorum))[0][1]
+                    replica_hist = wedge_stmnt[1]
+                    replica_hist_len = len(replica_hist)
+                    output('replica', replica_id, 'history is', replica_hist, 'of len',
+                           replica_hist_len , level=logging.INFO)
+                    output('sending catch_up request to ', replica_id, level=logging.INFO)
+                    output('sending history to catch up', longest_history[replica_hist_len:], level=logging.INFO)
+                    send(('catch_up', longest_history[replica_hist_len:]), to=self.replica_map[replica_id])
+                    # TODO: checkpoint proof
+                await(len(self.caught_up_messages) == len(quorum))
+                output('received', len(quorum), 'caught up messages', level=logging.INFO)
+                # check if hash in caught_up_messages are same
+                valid_quorum = True
+                hash_val = self.caught_up_messages[0][1]
+                for caught_up_msg in self.caught_up_messages:
+                    if not caught_up_msg[1] == hash_val:
+                        output('hash of state object do not match for ', caught_up_msg[0], level=logging.CRITICAL)
+                        valid_quorum = False
+                        break
+                if valid_quorum: break
+            # check if new wedged statements have arrived
+            -- wedgestatements
+
+        output('valid quorum obtained-', quorum, level=logging.INFO)
+        valid_result_quorum = None
+        # getting quorum of result statements sent by replicas
+        results_to_send = {}
+        request_ids = {}
+        for client_id in clients:
+            for res_quorum in itertools.permutations(self.caught_up_messages, t+1):
+                first_hash = crypto_hash(str(res_quorum[0][2][client_id]))
+                count = 1
+                for i in range(1,len(res_quorum)):
+                    if crypto_hash(str(res_quorum[i][2][client_id])) != first_hash:
+                        break
+                    else:
+                        count += 1
+                if count == t+1:
+                    results_to_send[client_id] = res_quorum[0][2][client_id]
+                    request_ids[client_id] = res_quorum[0][3][client_id]
+                    break
+
+        # output('-----------------------------------------------------------------------------', level=logging.INFO)
+        # output(results_to_send, level=logging.INFO)
+        # output(request_ids, level=logging.INFO)
+
+        if len(results_to_send) > 0:
+            output("valid client result quorum obtained", level=logging.INFO)
+            for client_id in results_to_send:
+                output("send result for", request_ids[client_id], 'to', client_id, level=logging.INFO)
+                res = results_to_send[client_id]
+                send(('result_olympus', sign((res, request_ids[client_id])), request_ids[client_id]), to=self.clients[client_id])
+
+        hash_val = self.caught_up_messages[0][1]
+        for wedge_stmnt in quorum:
+            replica_id = wedge_stmnt[0]
+            output('sending get_running state msg to ', replica_id, level=logging.INFO)
+            send(('get_running_state'), to=self.replica_map[replica_id])
+            await(self.replica_running_state is not None)
+            if crypto_hash(self.replica_running_state) == hash_val:
+                break
+            else:
+                self.replica_running_state = None
+
+        terminate_all_replicas()
+        output('running state', self.replica_running_state, level=logging.INFO)
+        self.configuration_number += 1
+        create_configuration(self.replica_running_state)
+        # reset
+        -- reconfigcomplete
+        self.reconfiguration_in_process = False
+        self.wedged_statements = []
+        self.replica_running_state = None
+
+    def is_history_consistent(wedged_statements):
+        output('checking consistency of wedged_statements', wedged_statements, level=logging.INFO)
+        # checking order proofs in each wedge statements
+        for wedged_statement in wedged_statements:
+            for order_proof in wedged_statement[1]:
+                if not is_order_proof_valid(order_proof):
+                    return False
+
+        for w1 in wedged_statements:
+            for w2 in wedged_statements:
+                if w1 == w2:
+                    continue
+                #('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof)
+                for slot in range(0, min(len(w1[1]), len(w2[1]))):
+                    if w1[1][slot][2] != w2[1][slot][2]:
+                        output('history inconsistent', level=logging.WARNING)
+                        return False
+            # TODO: check validity of checkpoint proof
+        return  True
+
+    def is_order_proof_valid(order_proof):
+        # order_proof - (self.slot, request_id, request, self, self.configuration,
+        #                   [signed_order_statement])
+        request = order_proof[2]
+        # verify order proof for preceding replicas
+        for ord_stmnt in order_proof[5]:
+            # get replica id from order_statement
+            decoded_message = ast.literal_eval(ord_stmnt.message.decode())
+            rplca_id = decoded_message[3]
+            request_from_order_statement = decoded_message[2]
+            if not verify(ord_stmnt, rplca_id) or request_from_order_statement != request:
+                output('order proof validation failed for replica', rplca_id, level=logging.CRITICAL)
+                return False
+
+        return True
+
+    def check_proof_of_misbehaviour(proof_of_misbehaviour):
+        return True
+
+    def terminate_all_replicas():
+        for replica in self.configuration:
+            send(('done'), to=replica)
+            send(('terminate'), to=replica)
+        self.configuration = []
+        self.all_replicas_public_keys = {}
+        self.configuration = []  # current configuration
+        self.replica_map = {}
+
+
+
+    def create_configuration(state_obj=None):
+        """ creating num_replica replicas """
+        start_replicas(state_obj)
+        send_client_public_keys_to_replicas()
 
     def run():
-        """ creating num_replica replicas """
         self.crypto_keys = generate_keys()
-        start_replicas()
         register_to_clients()
-        send_client_public_keys_to_replicas()
+        create_configuration()
         # wait till done not received
         await(received(('done')))
         output('olympus run finished!')
 
     def send_client_public_keys_to_replicas():
-        output('sending all_clients_public_keys to replicas')
+        output('sending all_clients_public_keys to replicas', level=logging.INFO)
         for replica in self.configuration:
             send(('all_clients_public_keys', self.all_clients_public_keys), to=replica)
 
@@ -64,7 +272,7 @@ class Olympus(process):
             send(('all_crypto_keys', self.crypto_keys[1],
                   key_pair, self.all_replicas_public_keys), to=clients[cnt_id])
 
-    def start_replicas():
+    def start_replicas(state_obj):
         """start num_replicas replicas"""
         output("starting replicas...", level=logging.INFO)
         for itr in range(num_replica):
@@ -76,8 +284,9 @@ class Olympus(process):
             else:
                 timeout = self.nonhead_timeout
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
-                        clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1]], num=1)
+                                                   clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1], state_obj], num=1)
             self.configuration.append(replica)
+            self.replica_map[replica_id] = replica
             start(replica)
 
         """send public keys and config to replica"""

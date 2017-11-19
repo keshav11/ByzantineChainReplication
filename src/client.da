@@ -35,9 +35,10 @@ class Client(process):
         self.crypto_keys = client_crypto_keys
         self.all_replicas_public_keys = all_replicas_public_keys
 
-    def receive(msg= ('config', configuration, configuration_number)):
+    def receive(msg= ('config', configuration, configuration_number, all_replicas_public_keys)):
         output('received config from olympus', level=logging.INFO)
         self.configuration = configuration
+        self.all_replicas_public_keys = all_replicas_public_keys
         self.configuration_number = configuration_number
         self.head = self.configuration[0]
         self.tail = self.configuration[-1]
@@ -67,12 +68,23 @@ class Client(process):
         output('received state object-', obj)
         self.replica_state_obj = obj
 
+    def get_decoded_msg(signed_msg):
+        return ast.literal_eval(signed_msg.message.decode())
+
+    def receive(msg= ('result_olympus', result, request_id)):
+        decoded_message = get_decoded_msg(result)
+        output('result received from olympus', decoded_message, level=logging.INFO)
+        if not verify(result, type='olympus'):
+            output('signature validation failed for result from olympus',
+                       level=logging.CRITICAL)
+
     def send_request(request_id, request, is_retrasmitted, recipient):
         output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
         signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
         send(('request', signed_request), to=recipient)
 
     def fetch_config():
+        self.configuration = None
         send(('get_config'), to=self.olympus)
         await(self.configuration is not None)
 
@@ -126,10 +138,9 @@ class Client(process):
         if count != (2*t + 1):
             output('result proofs are not correct for all replicas or some are missing',
                    level=logging.CRITICAL)
-            send(('reconfiguration-request', self), to=self.olympus)
+            #send(('reconfiguration-request', self), to=self.olympus) #TODO
 
         return count >= (t+1)
-
 
     def run():
         output("waiting for olympus to contact...", level=logging.INFO)
@@ -144,14 +155,19 @@ class Client(process):
             send_request(request_id, request, 0, self.head)
             self.last_result_calc_at_client = self.state_object.evaluate_request(request)
             output('waiting for result of request id', request_id)
-            if await(some(received(('result', _, _, r_id)), has= r_id==request_id)):
+            if await(some(received(('result', _, _, r_id)), has= r_id==request_id) or
+                             some(received(('result_olympus', _, r_id)), has= r_id==request_id)):
                 output('result received for request_id', request_id)
             elif timeout(self.TIMER_DURATION):
                 output('timeout occurred for message request_id', request_id)
                 fetch_config()
                 for replica in self.configuration:
                     send_request(request_id, request, 1, replica)
-                await(some(received(('result', _, _, r_id)), has=r_id == request_id))
+                await(some(received(('result', _, _, r_id)), has=r_id == request_id) or
+                      some(received(('result_olympus', _, r_id)), has= r_id==request_id))
+
+            if some(received(('result_olympus', _, r_id)), has=r_id == request_id):
+                output('result sent for request_id', request_id, 'by olympus', level=logging.INFO)
 
         testing()
         await(received(('done')))

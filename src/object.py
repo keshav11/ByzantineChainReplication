@@ -1,6 +1,11 @@
+import pickle
+
 class Object:
     def __init__(self):
         self.state = {}
+
+    def encode(self):
+        return pickle.dumps(self)
 
     def put(self, key, value):
         print('In put:', key, value)
