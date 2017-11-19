@@ -113,11 +113,11 @@ class Replica(process):
         self.olympus = olympus
         output('signature verification successful for inithist from olympus', level=logging.INFO)
 
-    def receive(msg=('wedge-request'), from_=sender):
+    def receive(msg=('wedge_request'), from_=sender):
         output('received wedge request from olympus', level=logging.INFO)
         self.mode = Modes.IMMUTABLE
         pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof))
-        send(('wedge-statement', sign(pickled_wedged_stmnt)), to=self.olympus)
+        send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
 
     def receive(msg=('catch_up', hist_suffix), from_=sender):
         output('received catch up message from olympus', level=logging.INFO)
@@ -157,7 +157,7 @@ class Replica(process):
         self.slot += 1
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes present in history
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
         operation = request
         ok_hash = ''
         if action:
@@ -174,7 +174,7 @@ class Replica(process):
         else:
             output('history len and slot number dont match. sending reconfiguration request to olympus',
                    level=logging.CRITICAL)
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
 
         result = eval_request(request_id, request)
         output('result of request', request, ' is ', result, level=logging.INFO)
@@ -248,12 +248,12 @@ class Replica(process):
         action = check_failure_scenario(request_id, request, event='shuttle')
         if not is_shuttle_valid(shuttle):
             output('order proof invalid. sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
         self.slot = shuttle[0][0]  # get slot from shuttle
         if not lower_numbered_slots_present(self.slot):
             # holes present in history
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
         operation = request
         ok_hash = ''
         if action:
@@ -290,7 +290,7 @@ class Replica(process):
         output('received result shuttle', shuttle, 'from', successor, level=logging.INFO)
         if not is_result_shuttle_valid(result, shuttle):
             output('shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         request_id = shuttle[0][1]
@@ -326,7 +326,7 @@ class Replica(process):
             send(('result', cached_result[0], cached_result[1]), to=client)
         elif timeout(self.TIMER_DURATION):
             output('sending reconfiguration request to olympus', timeout_id, level=logging.CRITICAL)
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
 
     def lower_numbered_slots_present(slt):
         slot_itr = 1

@@ -73,7 +73,7 @@ class Client(process):
 
     def receive(msg= ('result_olympus', result, request_id)):
         decoded_message = get_decoded_msg(result)
-        output('result received by olympus', decoded_message)
+        output('result received from olympus', decoded_message, level=logging.INFO)
         if not verify(result, type='olympus'):
             output('signature validation failed for result from olympus',
                        level=logging.CRITICAL)
