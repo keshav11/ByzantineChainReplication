@@ -121,6 +121,7 @@ class Olympus(process):
                         longest_history_replica_id = wdge_stmnt[0]
                 longest_history_len = len(longest_history)
                 for wedge_stmnt in quorum:
+                    self.caught_up_messages = [] # empty it
                     replica_id = wedge_stmnt[0]
                     #replica_hist = list(filter(lambda a: a[0] == replica_id, quorum))[0][1]
                     replica_hist = wedge_stmnt[1]
@@ -191,6 +192,7 @@ class Olympus(process):
         self.configuration_number += 1
         create_configuration(self.replica_running_state)
         # reset
+        -- reconfigcomplete
         self.reconfiguration_in_process = False
         self.wedged_statements = []
         self.replica_running_state = None
