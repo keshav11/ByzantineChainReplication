@@ -7,6 +7,7 @@ import nacl.hash
 import nacl.exceptions
 import ast
 import sys
+import pickle
 
 class Failure_Scenarios(Enum):
     CLIENT_REQUEST = "client_request"
@@ -115,7 +116,8 @@ class Replica(process):
     def receive(msg=('wedge-request'), from_=sender):
         output('received wedge request from olympus', level=logging.INFO)
         self.mode = Modes.IMMUTABLE
-        send(('wedge-statement', (self.replica_id, self.history, self.last_checkpoint_proof)), to=self.olympus)
+        pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof))
+        send(('wedge-statement', sign(pickled_wedged_stmnt)), to=self.olympus)
 
     def receive(msg=('catch_up', hist_suffix), from_=sender):
         output('received catch up message from olympus', level=logging.INFO)
@@ -133,7 +135,8 @@ class Replica(process):
 
     def receive(msg=('get_running_state'), from_=sender):
         output('received get running state message from olympus', level=logging.INFO)
-        send(('running_state', (self.replica_id, self.state_object)), to=self.olympus)
+        pickled_state = pickle.dumps((self.replica_id, self.state_object))
+        send(('running_state', sign(pickled_state)), to=self.olympus)
 
     def receive(msg=('config', config, config_no)):
         self.configuration = config
@@ -235,7 +238,7 @@ class Replica(process):
 
     # message handler for receiving shuttle going forward in the chain
     def receive(msg=('shuttle', shuttle), from_=predeccessor):
-        output('received shuttle', shuttle, 'from', predeccessor, level=logging.INFO) # TODO: INFO
+        output('received shuttle', shuttle, 'from', predeccessor, level=logging.INFO)
         self.slot = shuttle[0][0]
         request_id = shuttle[0][1]
         request = shuttle[0][2]
@@ -284,7 +287,7 @@ class Replica(process):
 
     # message handler for receiving result shuttle going backward in the chain
     def receive(msg= ('result_shuttle', result, shuttle), from_=successor):
-        output('received result shuttle', shuttle, 'from', successor, level=logging.INFO) # TODO: info
+        output('received result shuttle', shuttle, 'from', successor, level=logging.INFO)
         if not is_result_shuttle_valid(result, shuttle):
             output('shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration-request', None, self.replica_id), to=self.olympus)

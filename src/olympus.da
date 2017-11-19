@@ -61,16 +61,12 @@ class Olympus(process):
     def receive(msg=('wedge-statement', wedged_stmnt), from_=sender):
         # send(('wedge-statement', sign((self.replica_id, self.history, self.last_checkpoint_proof))), to=self.olympus)
         output('received wedge statement from ', sender, level=logging.INFO)
-        # TODO: sign
-        #decoded_req = a
-        #if not verify(wedged_stmnt, decoded_req[0]):
-        #    output('signature verification failed for wedge statement from', level=logging.INFO)
-        #    return
-        #else:
-        decoded_req = wedged_stmnt
-        history =  decoded_req[1]
-        last_checkpoint_proof = decoded_req[2]
-        self.wedged_statements.append(wedged_stmnt)
+        decoded_req = pickle.loads(get_decoded_msg(wedged_stmnt))
+        if not verify(wedged_stmnt, decoded_req[0]):
+           output('signature verification failed for wedge statement from', level=logging.INFO)
+           return
+        else:
+            self.wedged_statements.append(decoded_req)
 
     def receive(msg=('caught_up', caught_up_message), from_=sender):
         output('received caught up message from ', sender, level=logging.INFO)
@@ -80,17 +76,15 @@ class Olympus(process):
         else:
             output('caught up message,', decoded_msg)
             self.caught_up_messages.append(decoded_msg)
-            # TODO: do the sending of pending result to client
 
     def receive(msg=('running_state', running_state), from_=sender):
         output('received running state from ', sender, level=logging.INFO)
-        self.replica_running_state = running_state[1]
-        # decoded_msg = get_decoded_msg(running_state)
-        # if not verify(running_state, decoded_msg[0]):
-        #     output('signature verification failed for running state message from', sender, level=logging.WARNING)
-        # else:
-        #     output('running state message,', decoded_msg)
-        #     self.replica_running_state = decoded_msg[1]
+        decoded_msg = pickle.loads(get_decoded_msg(running_state))
+        if not verify(running_state, decoded_msg[0]):
+            output('signature verification failed for running state message from', sender, level=logging.WARNING)
+        else:
+            output('running state message,', decoded_msg)
+            self.replica_running_state = decoded_msg[1]
 
 
     def receive(msg=('reconfiguration-request', proof_of_misbehaviour, sender_id), from_= sender):
