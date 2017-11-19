@@ -50,6 +50,8 @@ class Replica(process):
             Failure_Scenarios.RESULT_SHUTTLE: -1
         } for _ in range(len(clients))]
         self.TIMER_DURATION = timeout
+        self.last_evaluated_result = {}
+        self.last_evaluated_request_id = {}
         output('replica setup completed', level=logging.DEBUG)
 
     def sign(data):
@@ -120,8 +122,10 @@ class Replica(process):
         for order_statement in hist_suffix:
             request = order_statement[2]
             output('applying request:', request, level=logging.INFO)
-            result = self.state_object.evaluate_request(request)
-        send(('caught_up', sign((self.replica_id, crypto_hash(self.state_object)))), to=self.olympus)
+            request_id = order_statement[1]
+            result = eval_request(request_id, request)
+        send(('caught_up', sign((self.replica_id, crypto_hash(self.state_object), self.last_evaluated_result,
+                                 self.last_evaluated_request_id))), to=self.olympus)
 
     def receive(msg=('terminate'), from_=sender):
         output('received terminate message from olympus', level=logging.INFO)
@@ -135,6 +139,13 @@ class Replica(process):
         self.configuration = config
         self.configuration_number = config_no
         output('received config from olympus', level=logging.INFO)
+
+    def eval_request(request_id, request):
+        result = self.state_object.evaluate_request(request)
+        client_id = request_id.split('_')[0]
+        self.last_evaluated_result[client_id] = result
+        self.last_evaluated_request_id[client_id] = request_id
+        return result
 
     def handle_new_request(request_id, request, retransmitted):
         output('received new request', request, 'with id', request_id, level=logging.INFO)
@@ -162,7 +173,7 @@ class Replica(process):
                    level=logging.CRITICAL)
             send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
 
-        result = self.state_object.evaluate_request(request)
+        result = eval_request(request_id, request)
         output('result of request', request, ' is ', result, level=logging.INFO)
         output('state object at this moment is', level=logging.INFO)
         print_state_object()

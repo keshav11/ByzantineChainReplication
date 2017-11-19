@@ -8,6 +8,7 @@ import ast
 import random
 import time
 import itertools
+import pickle
 
 class Olympus(process):
     def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, t):
@@ -24,7 +25,7 @@ class Olympus(process):
         self.reconfiguration_in_process = False
 
     def sign(data):
-        return crypto_keys[0].sign(str(data).encode('utf-8'))
+        return crypto_keys[0].sign(str(data).encode())
 
     def verify(data, id=None, type="replica"):
         if type == "replica":
@@ -50,9 +51,6 @@ class Olympus(process):
         v_key = s_key.verify_key
         v_key_hex = v_key.encode(encoder=nacl.encoding.HexEncoder)
         return (s_key, v_key_hex)
-
-    def get_decoded_msg(signed_msg):
-        return ast.literal_eval(signed_msg.message.decode())
 
     def receive(msg=('get_config'), from_= client):
         send(('config', self.configuration, self.configuration_number, self.all_replicas_public_keys), to=client)
@@ -155,6 +153,34 @@ class Olympus(process):
             -- wedgestatements
 
         output('valid quorum obtained-', quorum, level=logging.INFO)
+        valid_result_quorum = None
+        # getting quorum of result statements sent by replicas
+        results_to_send = {}
+        request_ids = {}
+        for client_id in clients:
+            for res_quorum in itertools.permutations(self.caught_up_messages, t+1):
+                first_hash = crypto_hash(str(res_quorum[0][2][client_id]))
+                count = 1
+                for i in range(1,len(res_quorum)):
+                    if crypto_hash(str(res_quorum[i][2][client_id])) != first_hash:
+                        break
+                    else:
+                        count += 1
+                if count == t+1:
+                    results_to_send[client_id] = res_quorum[0][2][client_id]
+                    request_ids[client_id] = res_quorum[0][3][client_id]
+                    break
+
+        # output('-----------------------------------------------------------------------------', level=logging.INFO)
+        # output(results_to_send, level=logging.INFO)
+        # output(request_ids, level=logging.INFO)
+
+        if len(results_to_send) > 0:
+            output("valid client result quorum obtained", level=logging.INFO)
+            for client_id in results_to_send:
+                output("send result for", request_ids[client_id], 'to', client_id, level=logging.INFO)
+                res = results_to_send[client_id]
+                send(('result_olympus', sign((res, request_ids[client_id])), request_ids[client_id]), to=self.clients[client_id])
 
         hash_val = self.caught_up_messages[0][1]
         for wedge_stmnt in quorum:
@@ -169,8 +195,8 @@ class Olympus(process):
 
         terminate_all_replicas()
         output('running state', self.replica_running_state, level=logging.INFO)
-        create_configuration(self.replica_running_state)
         self.configuration_number += 1
+        create_configuration(self.replica_running_state)
         # reset
         self.reconfiguration_in_process = False
         self.wedged_statements = []
