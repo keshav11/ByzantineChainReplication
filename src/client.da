@@ -36,12 +36,12 @@ class Client(process):
         self.all_replicas_public_keys = all_replicas_public_keys
 
     def receive(msg= ('config', configuration, configuration_number, all_replicas_public_keys)):
-        output('received config from olympus', level=logging.INFO)
         self.configuration = configuration
         self.all_replicas_public_keys = all_replicas_public_keys
         self.configuration_number = configuration_number
         self.head = self.configuration[0]
         self.tail = self.configuration[-1]
+        output("received config from olympus ", self.configuration, level=logging.INFO)
 
     def receive(msg= ('result', result, result_proof, request_id)):
         if not validate(result, result_proof):
@@ -146,7 +146,6 @@ class Client(process):
         output("waiting for olympus to contact...", level=logging.INFO)
         await(self.olympus is not None)
         fetch_config()
-        output("received config from olympus ", self.configuration, level=logging.INFO)
 
         workload = list(filter(None, workload.split(';')))
         for i in range(len(workload)):

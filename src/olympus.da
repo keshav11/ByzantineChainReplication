@@ -11,7 +11,7 @@ import itertools
 import pickle
 
 class Olympus(process):
-    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, t):
+    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, checkpt_interval, t):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.configuration = []  # current configuration
@@ -283,8 +283,10 @@ class Olympus(process):
                 timeout = self.head_timeout
             else:
                 timeout = self.nonhead_timeout
+            output('sending fail scen to rep', itr, 'are', failure_scenarios.get(itr), level=logging.INFO)
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
-                                                   clients, failure_scenarios.get(itr), timeout, self.crypto_keys[1], state_obj], num=1)
+                                                   clients, failure_scenarios.get(itr), timeout, checkpt_interval,
+                                                   self.crypto_keys[1], state_obj], num=1)
             self.configuration.append(replica)
             self.replica_map[replica_id] = replica
             start(replica)

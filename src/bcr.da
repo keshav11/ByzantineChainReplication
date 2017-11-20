@@ -1,7 +1,3 @@
-# TODO - client par result validation
-# TODO - code comments and cleanup and rearrange methods
-# TODO - client should continuously send reconfig
-# TODO - improve logging
 
 import os
 import random
@@ -56,7 +52,7 @@ def main():
         client_id = 'client' + str(i)
         if workload.startswith('pseudorandom'):
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
-            workload = pseudorandom(pseudorandom_args[0],int(pseudorandom_args[1]))
+            workload = pseudorandom(pseudorandom_args[0], int(pseudorandom_args[1]))
         client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000,
                                             config['test_case_name']], num=1)
         clients[client_id] = client
@@ -65,7 +61,8 @@ def main():
     """ starting olympus """
     num_replicas = 2*config['t']+1
     olympus = new(olympus_module.Olympus, [num_replicas, clients, failure_scenarios,
-                    int(config['head_timeout'])/1000, int(config['nonhead_timeout'])/1000, int(config['t'])], num=1)
+                    int(config['head_timeout'])/1000, int(config['nonhead_timeout'])/1000,
+                    config.get('checkpt_interval', 0), int(config['t'])], num=1)
     start(olympus)
 
 

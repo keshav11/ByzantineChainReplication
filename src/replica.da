@@ -1,3 +1,6 @@
+# self.slot for new replica?
+# pass DS to new replicas
+
 from src.object import Object
 from enum import Enum
 import nacl.signing
@@ -8,13 +11,24 @@ import nacl.exceptions
 import ast
 import sys
 import pickle
+import json
+import os
+import time
 
-class Failure_Scenarios(Enum):
+INJECTED = "injected"
+PENDING = "pending"
+
+class FailureScenarios(Enum):
     CLIENT_REQUEST = "client_request"
     FORWARDED_REQUEST = "forwarded_request"
     SHUTTLE = "shuttle"
     RESULT_SHUTTLE = "result_shuttle"
-
+    CHECKPOINT = "checkpoint"
+    COMPLETED_CHECKPOINT = "completed_checkpoint"
+    WEDGE_REQUEST = "wedge_request"
+    NEW_CONFIGURATION = "new_configuration"
+    GET_RUNNING_STATE = "get_running_state"
+    CATCH_UP = "catch_up"
 
 class Modes(Enum):
     ACTIVE = 0
@@ -25,7 +39,7 @@ class Modes(Enum):
 class Replica(process):
 
     def setup(replica_id:str, position:int, crypto_keys:tuple,
-              clients, failure_scenarios, timeout, olympus_pub_key, obj):
+              clients, failure_scenarios, timeout, checkpt_interval, olympus_pub_key, obj=None):
 
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
@@ -44,15 +58,29 @@ class Replica(process):
         self.replica_id = replica_id
         self.olympus_pub_key = olympus_pub_key
         self.last_checkpoint_proof = None
+        self.checkpointed_slot = 0
         self.client_requests_tracker = [{
-            Failure_Scenarios.CLIENT_REQUEST: -1,
-            Failure_Scenarios.FORWARDED_REQUEST: -1,
-            Failure_Scenarios.SHUTTLE: -1,
-            Failure_Scenarios.RESULT_SHUTTLE: -1
+            FailureScenarios.CLIENT_REQUEST: -1,
+            FailureScenarios.FORWARDED_REQUEST: -1,
+            FailureScenarios.SHUTTLE: -1,
+            FailureScenarios.RESULT_SHUTTLE: -1,
         } for _ in range(len(clients))]
+        self.message_tracker = {
+            FailureScenarios.CHECKPOINT: -1,
+            FailureScenarios.COMPLETED_CHECKPOINT: -1,
+            FailureScenarios.WEDGE_REQUEST: -1,
+            FailureScenarios.NEW_CONFIGURATION: -2,
+            FailureScenarios.GET_RUNNING_STATE: -1,
+            FailureScenarios.CATCH_UP: -1
+        }
+        self.failures = {
+            INJECTED: {},
+            PENDING: {}
+        }
         self.TIMER_DURATION = timeout
         self.last_evaluated_result = {}
         self.last_evaluated_request_id = {}
+        output('failure scen are', failure_scenarios, level=logging.INFO)
         output('replica setup completed', level=logging.DEBUG)
 
     def sign(data):
@@ -114,13 +142,39 @@ class Replica(process):
         output('signature verification successful for inithist from olympus', level=logging.INFO)
 
     def receive(msg=('wedge_request'), from_=sender):
+        self.message_tracker[FailureScenarios.WEDGE_REQUEST] += 1
         output('received wedge request from olympus', level=logging.INFO)
+        action, trigger = check_failure_scenario()
+        if action:
+            if 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()'))/1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
         self.mode = Modes.IMMUTABLE
         pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof))
         send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
 
     def receive(msg=('catch_up', hist_suffix), from_=sender):
+        self.message_tracker[FailureScenarios.CATCH_UP] += 1
         output('received catch up message from olympus', level=logging.INFO)
+        action, trigger = check_failure_scenario()
+        if action:
+            if 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()')) / 1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
         for order_statement in hist_suffix:
             request = order_statement[2]
             output('applying request:', request, level=logging.INFO)
@@ -134,14 +188,41 @@ class Replica(process):
         sys.exit()
 
     def receive(msg=('get_running_state'), from_=sender):
+        self.message_tracker[FailureScenarios.GET_RUNNING_STATE] += 1
         output('received get running state message from olympus', level=logging.INFO)
+        action, trigger = check_failure_scenario()
+        if action:
+            if 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()')) / 1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
         pickled_state = pickle.dumps((self.replica_id, self.state_object))
         send(('running_state', sign(pickled_state)), to=self.olympus)
 
     def receive(msg=('config', config, config_no)):
+        self.message_tracker[FailureScenarios.NEW_CONFIGURATION] += 1
+        action, trigger = check_failure_scenario()
+        if action:
+            if 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()')) / 1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
         self.configuration = config
         self.configuration_number = config_no
         output('received config from olympus', level=logging.INFO)
+        output('config num is', self.configuration_number, level=logging.INFO)
 
     def eval_request(request_id, request):
         result = self.state_object.evaluate_request(request)
@@ -153,42 +234,57 @@ class Replica(process):
     def handle_new_request(request_id, request, retransmitted):
         output('received new request', request, 'with id', request_id, level=logging.INFO)
         event = 'forwarded_request' if retransmitted else 'client_request'
-        action = check_failure_scenario(request_id, request, event)
-        self.slot += 1
+        action, trigger = check_failure_scenario(request_id=request_id, event=event)
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes present in history
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
+            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            return
+
         operation = request
         ok_hash = ''
         if action:
             if 'change_operation' in action:
-                output('trigger failure scenario detected, action is to', action, level=logging.INFO)
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 operation = "get('x')"
             elif 'change_result' in action:
-                output('trigger failure scenario detected, action is to', action, level=logging.INFO)
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 ok_hash = crypto_hash('OK')
+            elif 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()'))/1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
 
-        if len(self.history) < self.slot:
-            order_statement = ('order', self.slot, operation, self.replica_id)
-            signed_order_statement = sign(order_statement)  # sign order statement
-        else:
-            output('history len and slot number dont match. sending reconfiguration request to olympus',
-                   level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+        order_statement = ('order', self.slot+1, operation, self.replica_id)
+        signed_order_statement = sign(order_statement)  # sign order statement
 
         result = eval_request(request_id, request)
-        output('result of request', request, ' is ', result, level=logging.INFO)
-        output('state object at this moment is', level=logging.INFO)
-        print_state_object()
-        order_proof = (self.slot, request_id, request, self, self.configuration,
+        #output('result of request', request, ' is ', result, level=logging.INFO)
+        #output('state object at this moment is', level=logging.INFO)
+        #print_state_object()
+        order_proof = (self.slot+1, request_id, request, self, self.configuration,
                        [signed_order_statement])
         self.history.append(order_proof)
+        self.slot += 1
         result_hash = ok_hash or crypto_hash(result)
         signed_result_proof = [sign(('result', request_id, operation,
                                      self.replica_id, result_hash))]
         shuttle = (order_proof, signed_result_proof)
-        output('sending shuttle to', self.configuration[self.position + 1], level=logging.INFO)
+        #output('sending shuttle to', self.configuration[self.position + 1], level=logging.INFO)
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
+
+        # checkpointing
+        if self.slot % checkpt_interval == 0:
+            output('CPT !! taking checkpoint. current slot is', self.slot, level=logging.INFO)
+            checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True))))
+            checkpt_shuttle = [checkpt_stmt]
+            send(('checkpt_shuttle', checkpt_shuttle), to=self.configuration[self.position + 1])
 
     # message handler for receiving requests either from client or retransmitted ones from replicas
     def receive(msg=('request', signed_request), from_=sender):
@@ -205,15 +301,15 @@ class Replica(process):
                level=logging.INFO)
         client_no = int(request_id.split('_')[0].strip('client'))
         if not retransmitted:
-            self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
+            self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
             handle_new_request(request_id, request, retransmitted)
         # retransmitted request scenario
         else:
             if sender in self.configuration:
                 # received forwarded request from another replica
-                self.client_requests_tracker[client_no][Failure_Scenarios.FORWARDED_REQUEST] += 1
+                self.client_requests_tracker[client_no][FailureScenarios.FORWARDED_REQUEST] += 1
             else:
-                self.client_requests_tracker[client_no][Failure_Scenarios.CLIENT_REQUEST] += 1
+                self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
 
             if is_correct(self) and request_id in self.result_cache:
                 output('result already in cache. send result to client', level=logging.INFO)
@@ -221,7 +317,7 @@ class Replica(process):
                 cached_result = self.result_cache[request_id]
                 send(('result', cached_result[0], cached_result[1]), to=client)
             elif self.mode == Modes.IMMUTABLE:
-                pass  # TODO: return error
+                return  # TODO: return error
             elif self.position != 0: # not head
                 output('current position is not head. so forward request to head', level=logging.INFO)
                 send(('request', request_id, request, 1), to= self.configuration[0])
@@ -239,21 +335,22 @@ class Replica(process):
     # message handler for receiving shuttle going forward in the chain
     def receive(msg=('shuttle', shuttle), from_=predeccessor):
         output('received shuttle', shuttle, 'from', predeccessor, level=logging.INFO)
-        self.slot = shuttle[0][0]
+        #self.slot = shuttle[0][0]
         request_id = shuttle[0][1]
         request = shuttle[0][2]
 
         client_no = int(request_id.split('_')[0].strip('client'))
-        self.client_requests_tracker[client_no][Failure_Scenarios.SHUTTLE] += 1
-        action = check_failure_scenario(request_id, request, event='shuttle')
+        self.client_requests_tracker[client_no][FailureScenarios.SHUTTLE] += 1
+        action, trigger = check_failure_scenario(request_id=request_id, event='shuttle')
         if not is_shuttle_valid(shuttle):
             output('order proof invalid. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
-        self.slot = shuttle[0][0]  # get slot from shuttle
         if not lower_numbered_slots_present(self.slot):
             # holes present in history
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
+            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            return
         operation = request
         ok_hash = ''
         if action:
@@ -263,18 +360,31 @@ class Replica(process):
                 ok_hash = crypto_hash('OK')
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
-        order_statement = ('order', self.slot, operation, self.replica_id)
+            elif 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()'))/1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
+
+        order_statement = ('order', self.slot+1, operation, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
         result = self.state_object.evaluate_request(request)
-        output('result of request', request, 'is', result, level=logging.INFO)
-        output('state object at this moment is', level=logging.INFO)
-        print_state_object()
+        #output('result of request', request, 'is', result, level=logging.INFO)
+        #output('state object at this moment is', level=logging.INFO)
+        #print_state_object()
         shuttle[0][5].append(signed_order_statement)
 
         result_hash = ok_hash or crypto_hash(result)
         result_statement = sign(('result', request_id, operation, self.replica_id, result_hash))
         shuttle[1].append(result_statement)
         self.history.append(shuttle[0]) # appending order proof to history
+        self.slot += 1
+
         if self.position != len(self.configuration)-1:   # it is not tail replica
             send(('shuttle', shuttle), to=self.configuration[self.position+1])
         else:
@@ -288,16 +398,18 @@ class Replica(process):
     # message handler for receiving result shuttle going backward in the chain
     def receive(msg= ('result_shuttle', result, shuttle), from_=successor):
         output('received result shuttle', shuttle, 'from', successor, level=logging.INFO)
+
+        request_id = shuttle[0][1]
+        request = shuttle[0][2]
+        client_no = int(request_id.split('_')[0].strip('client'))
+        self.client_requests_tracker[client_no][FailureScenarios.RESULT_SHUTTLE] += 1
+        action, trigger = check_failure_scenario(request_id=request_id, event='result_shuttle')
+
         if not is_result_shuttle_valid(result, shuttle):
             output('shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
-        request_id = shuttle[0][1]
-        request = shuttle[0][2]
-        client_no = int(request_id.split('_')[0].strip('client'))
-        self.client_requests_tracker[client_no][Failure_Scenarios.RESULT_SHUTTLE] += 1
-        action = check_failure_scenario(request_id, request, event='result_shuttle')
         if action:
             output('trigger failure scenario detected, action is to', action, level=logging.DEBUG)
             if 'change_operation' in action:
@@ -309,11 +421,90 @@ class Replica(process):
                 shuttle[1][self.position] = sign(('result', request_id, op, self.replica_id, crypto_hash('OK')))
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
+            elif 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()'))/1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
 
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
             send(('result_shuttle', result, shuttle), to=self.configuration[self.position - 1])
         output('received result shuttle from ', successor, level=logging.INFO)
+
+    # message handler for receiving checkpt shuttle going forward in the chain
+    def receive(msg= ('checkpt_shuttle', checkpt_shuttle)):
+
+        self.message_tracker[FailureScenarios.CHECKPOINT] += 1
+        action, trigger = check_failure_scenario()
+        if action:
+            if 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()')) / 1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger)
+
+        output('CPT !! received checkpt shuttle. position is', self.position, 'slot is', self.slot,
+               'len of history is', len(self.history), level=logging.INFO)
+        checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True))))
+        checkpt_shuttle.append(checkpt_stmt)
+
+        if self.position != len(self.configuration) - 1:  # it is not tail replica
+            send(('checkpt_shuttle', checkpt_shuttle), to=self.configuration[self.position + 1])
+        else:
+            if is_checkpt_shuttle_valid(checkpt_shuttle):
+                # TODO - interval or k*interval
+                del self.history[:checkpt_interval]
+                #self.slot -= checkpt_interval
+                self.last_checkpoint_proof = checkpt_shuttle
+                self.checkpointed_slot += checkpt_interval
+            if self.position != 0:
+                send(('checkpt_proof', checkpt_shuttle), to=self.configuration[self.position-1])
+
+    def receive(msg= ('checkpt_proof', checkpt_proof)):
+
+        self.message_tracker[FailureScenarios.COMPLETED_CHECKPOINT] += 1
+        action, trigger = check_failure_scenario()
+        if action:
+            if 'crash' in action:
+                pending_to_injected(action, trigger)
+                logging.shutdown()
+                os._exit(-1)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()')) / 1000.0)
+            elif 'drop' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
+
+        output('CPT !! received checkpt proof - ', checkpt_proof, level=logging.INFO)
+        output('CPT !! received checkpt proof. position is', self.position, 'slot is', self.slot,
+               'len of history is', len(self.history), level=logging.INFO)
+        if is_checkpt_shuttle_valid(checkpt_proof):
+            del self.history[:checkpt_interval]
+            #self.slot -= checkpt_interval
+            self.last_checkpoint_proof = checkpt_proof
+            self.checkpointed_slot += checkpt_interval
+
+        if self.position != 0:
+            send(('checkpt_proof', checkpt_proof), to=self.configuration[self.position-1])
+
+        output('CPT !! checkpointed slot updated to', self.checkpointed_slot, 'last_checkpoint_proof is', self.last_checkpoint_proof, level=logging.INFO)
+        output('CPT !! updated history is', self.history, level=logging.INFO)
 
     def run():
         await(received(('done')))
@@ -329,32 +520,74 @@ class Replica(process):
             send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
 
     def lower_numbered_slots_present(slt):
-        slot_itr = 1
+        if not slt:
+            return True
+
+        slot_itr = self.checkpointed_slot+1
         for op in self.history:
+            output('checking lower slots. op', op[0], 'slot_itr', slot_itr, level=logging.INFO)
             if op[0] != slot_itr:
                 return False
             slot_itr+=1
-        return slot_itr == slt
+        return self.checkpointed_slot + len(self.history) == slt
 
     # this function checks if failure needs to be triggered on events
-    def check_failure_scenario(request_id, request, event=None):
+    def check_failure_scenario(request_id=None, event=None):
         output('checking for failure scenarios with respect to request id', request_id, 'for event', event,
                level=logging.INFO)
-        client_no = int(request_id.split('_')[0].strip('client'))
+        client_no = int(request_id.split('_')[0].strip('client')) if request_id else None
+        output('failure scenarios current config num', self.configuration_number, 'are', failure_scenarios, level=logging.INFO)
         if failure_scenarios and failure_scenarios.get(self.configuration_number):
             scenarios = failure_scenarios[self.configuration_number].split(';')
             if not scenarios:
-                return False
+                return False, None
+
+            for probable_fail_scen in self.message_tracker:
+                m = self.message_tracker[probable_fail_scen]
+                search_str = probable_fail_scen.value + '(' + str(m) + ')'
+                for scenario in scenarios:
+                    if search_str in scenario and search_str not in self.failures[INJECTED]\
+                            .get(self.configuration_number, []):
+                        self.failures[PENDING].setdefault(self.configuration_number, []).append(search_str)
+                        output('FAIL ! Detected failure scenario', scenario, 'action is to', scenario.split(search_str+',')[1],
+                               level=logging.CRITICAL)
+                        output('FAIL ! failures dict is', self.failures, level=logging.INFO)
+                        return scenario.split(search_str+',')[1], search_str
+
+            if not client_no:
+                return False, None
             for probable_fail_scen in self.client_requests_tracker[client_no]:
                 m = self.client_requests_tracker[client_no][probable_fail_scen]
                 search_str = '(' + str(client_no) + ',' + str(m) + '),'
                 for scenario in scenarios:
                     scenario = scenario.strip(' ')
                     if search_str in scenario and scenario.startswith(event):
-                        output('Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1],
+                        output('FAIL ! Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1],
                                level=logging.CRITICAL)
-                        return scenario.split(search_str)[1]
-        return False
+                        return scenario.split(search_str)[1], event+search_str
+        return False, None
+
+    def pending_to_injected(action, trigger):
+        try:
+            output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+            self.failures.get(INJECTED, []).setdefault(self.configuration_number, []).append(trigger)
+            self.failures.get(PENDING, []).get(self.configuration_number, []).remove(trigger)
+            output('moved from pending to injected. failures are', self.failures, level=logging.INFO)
+        except e:
+            output("exception while moving failure scenario from pending to injected : ", str(e), level=logging.INFO)
+
+    def inject_extra_op(action, trigger):
+        pending_to_injected(action, trigger)
+        request = "put('a','a')"
+        self.state_object.evaluate_request(request)
+        output('state object at this moment is', level=logging.INFO)
+        print_state_object()
+
+    def inject_increment_slot(action, trigger):
+        pending_to_injected(action, trigger)
+        if self.position == 0:
+            self.slot += 1
+            output('injecting increment slot, slot now is', self.slot, level=logging.INFO)
 
     # if request is in history and not in result cache then it is pending
     def is_request_pending(req_id):
@@ -443,6 +676,9 @@ class Replica(process):
                 output('result shuttle verification failed for replica', rplca_id, level=logging.CRITICAL)
                 return False
 
+        return True
+
+    def is_checkpt_shuttle_valid(checkpt_shuttle):
         return True
 
 def main():
