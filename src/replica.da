@@ -157,7 +157,7 @@ class Replica(process):
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
         self.mode = Modes.IMMUTABLE
-        pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof))
+        pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot))
         send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
 
     def receive(msg=('catch_up', hist_suffix), from_=sender):
@@ -238,7 +238,7 @@ class Replica(process):
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes present in history
             output('holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         operation = request
@@ -280,7 +280,7 @@ class Replica(process):
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
 
         # checkpointing
-        if self.slot % checkpt_interval == 0:
+        if checkpt_interval != 0 and self.slot % checkpt_interval == 0:
             output('CPT !! taking checkpoint. current slot is', self.slot, level=logging.INFO)
             checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True))))
             checkpt_shuttle = [checkpt_stmt]
@@ -349,7 +349,7 @@ class Replica(process):
         if not lower_numbered_slots_present(self.slot):
             # holes present in history
             output('holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration-request', None, self.replica_id), to=self.olympus)
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
         operation = request
         ok_hash = ''
@@ -397,8 +397,8 @@ class Replica(process):
 
     # message handler for receiving result shuttle going backward in the chain
     def receive(msg= ('result_shuttle', result, shuttle), from_=successor):
-        output('received result shuttle', shuttle, 'from', successor, level=logging.INFO)
 
+        output('received result shuttle', shuttle, 'from', successor, level=logging.INFO)
         request_id = shuttle[0][1]
         request = shuttle[0][2]
         client_no = int(request_id.split('_')[0].strip('client'))
@@ -439,7 +439,9 @@ class Replica(process):
 
     # message handler for receiving checkpt shuttle going forward in the chain
     def receive(msg= ('checkpt_shuttle', checkpt_shuttle)):
-
+        # To test checkpoint code for reconfig
+        if self.slot > 11 and self.position == 2:
+            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
         self.message_tracker[FailureScenarios.CHECKPOINT] += 1
         action, trigger = check_failure_scenario()
         if action:

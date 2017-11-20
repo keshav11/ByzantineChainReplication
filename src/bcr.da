@@ -1,4 +1,16 @@
 
+# phase 3
+# TODO: validating dictionary
+# TODO: detect proof of misbehavior and send reconfig request
+# TODO: ask olympus if config changed periodically
+# TODO: adding validation of client request by each replica
+# TODO: use of checkpoint proof during reconfiguration
+# TODO: proof of misbehaviour
+# TODO: how many retries are required by client?
+# TODO: failures and triggers
+# TODO: testing
+# TODO: documentation
+
 import os
 import random
 import string
