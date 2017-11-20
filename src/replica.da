@@ -1,4 +1,5 @@
 # self.slot for new replica?
+# pass DS to new replicas
 
 from src.object import Object
 from enum import Enum
@@ -146,8 +147,7 @@ class Replica(process):
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -166,8 +166,7 @@ class Replica(process):
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -194,8 +193,7 @@ class Replica(process):
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -212,8 +210,7 @@ class Replica(process):
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -254,8 +251,7 @@ class Replica(process):
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 ok_hash = crypto_hash('OK')
             elif 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -365,8 +361,7 @@ class Replica(process):
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
             elif 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -427,8 +422,7 @@ class Replica(process):
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
             elif 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -450,8 +444,7 @@ class Replica(process):
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -460,6 +453,11 @@ class Replica(process):
             elif 'drop' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger)
+
         output('CPT !! received checkpt shuttle. position is', self.position, 'slot is', self.slot,
                'len of history is', len(self.history), level=logging.INFO)
         checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True))))
@@ -483,8 +481,7 @@ class Replica(process):
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                pending_to_injected(trigger)
+                pending_to_injected(action, trigger)
                 logging.shutdown()
                 os._exit(-1)
             elif 'sleep' in action:
@@ -493,6 +490,7 @@ class Replica(process):
             elif 'drop' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+
         output('CPT !! received checkpt proof - ', checkpt_proof, level=logging.INFO)
         output('CPT !! received checkpt proof. position is', self.position, 'slot is', self.slot,
                'len of history is', len(self.history), level=logging.INFO)
@@ -569,13 +567,27 @@ class Replica(process):
                         return scenario.split(search_str)[1], event+search_str
         return False, None
 
-    def pending_to_injected(trigger):
+    def pending_to_injected(action, trigger):
         try:
+            output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
             self.failures.get(INJECTED, []).setdefault(self.configuration_number, []).append(trigger)
             self.failures.get(PENDING, []).get(self.configuration_number, []).remove(trigger)
             output('moved from pending to injected. failures are', self.failures, level=logging.INFO)
         except e:
             output("exception while moving failure scenario from pending to injected : ", str(e), level=logging.INFO)
+
+    def inject_extra_op(action, trigger):
+        pending_to_injected(action, trigger)
+        request = "put('a','a')"
+        self.state_object.evaluate_request(request)
+        output('state object at this moment is', level=logging.INFO)
+        print_state_object()
+
+    def inject_increment_slot(action, trigger):
+        pending_to_injected(action, trigger)
+        if self.position == 0:
+            self.slot += 1
+            output('injecting increment slot, slot now is', self.slot, level=logging.INFO)
 
     # if request is in history and not in result cache then it is pending
     def is_request_pending(req_id):
