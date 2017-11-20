@@ -53,6 +53,7 @@ class Olympus(process):
         return (s_key, v_key_hex)
 
     def receive(msg=('get_config'), from_= client):
+        await(self.reconfiguration_in_process is False)
         send(('config', self.configuration, self.configuration_number, self.all_replicas_public_keys), to=client)
 
     def get_decoded_msg(signed_msg):
@@ -309,7 +310,6 @@ class Olympus(process):
                 timeout = self.head_timeout
             else:
                 timeout = self.nonhead_timeout
-            output('sending fail scen to rep', itr, 'are', failure_scenarios.get(itr), level=logging.INFO)
             replica = new(replica_module.Replica, [replica_id, itr, key_pair,
                                                    clients, failure_scenarios.get(itr), timeout, checkpt_interval,
                                                    self.crypto_keys[1], state_obj], num=1)
