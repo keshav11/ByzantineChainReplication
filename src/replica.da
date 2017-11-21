@@ -441,6 +441,8 @@ class Replica(process):
         if self.slot > 11 and self.position == 2:
             send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
         self.message_tracker[FailureScenarios.CHECKPOINT] += 1
+
+        await(len(self.history) >= checkpt_interval)
         action, trigger = check_failure_scenario()
         if action:
             if 'crash' in action:
@@ -490,6 +492,10 @@ class Replica(process):
             elif 'drop' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger)
 
         output('CPT !! received checkpt proof - ', checkpt_proof, level=logging.INFO)
         output('CPT !! received checkpt proof. position is', self.position, 'slot is', self.slot,
