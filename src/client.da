@@ -138,9 +138,7 @@ class Client(process):
         if count != (2*t + 1):
             output('result proofs are not correct for all replicas or some are missing',
                    level=logging.CRITICAL)
-
             send(('reconfiguration_request', (result, result_proof), self.client_id), to=self.olympus)
-
         return count >= (t+1)
 
     def run():

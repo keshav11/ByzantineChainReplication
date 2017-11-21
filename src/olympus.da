@@ -240,8 +240,13 @@ class Olympus(process):
         return  True
 
     def is_order_proof_valid(order_proof):
-        # order_proof - (self.slot, request_id, request, self, self.configuration,
-        #                   [signed_order_statement])
+        # order_proof = (self.slot + 1, request_id, request, self, self.configuration,
+        #                [signed_order_statement], signed_request)
+        signed_request = order_proof[6]
+        decoded_req = ast.literal_eval(signed_request.message.decode())
+        if not verify(signed_request, decoded_req[1], type="client"):
+            output('signature verification failed for request', decoded_req[0], level=logging.INFO)
+            return False
         request = order_proof[2]
         # verify order proof for preceding replicas
         for ord_stmnt in order_proof[5]:

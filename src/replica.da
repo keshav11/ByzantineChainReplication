@@ -230,7 +230,7 @@ class Replica(process):
         self.last_evaluated_request_id[client_id] = request_id
         return result
 
-    def handle_new_request(request_id, request, retransmitted):
+    def handle_new_request(request_id, request, retransmitted, signed_request):
         output('received new request', request, 'with id', request_id, level=logging.INFO)
         event = 'forwarded_request' if retransmitted else 'client_request'
         action, trigger = check_failure_scenario(request_id=request_id, event=event)
@@ -268,7 +268,7 @@ class Replica(process):
         #output('state object at this moment is', level=logging.INFO)
         #print_state_object()
         order_proof = (self.slot+1, request_id, request, self, self.configuration,
-                       [signed_order_statement])
+                       [signed_order_statement], signed_request)
         self.history.append(order_proof)
         self.slot += 1
         result_hash = ok_hash or crypto_hash(result)
@@ -301,7 +301,7 @@ class Replica(process):
         client_no = int(request_id.split('_')[0].strip('client'))
         if not retransmitted:
             self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
-            handle_new_request(request_id, request, retransmitted)
+            handle_new_request(request_id, request, retransmitted, signed_request)
         # retransmitted request scenario
         else:
             if sender in self.configuration:
@@ -326,7 +326,7 @@ class Replica(process):
                     await_for_result(request_id, 'head-timeout pending request')
                 else: # head has not seen this request
                     output('not seen this request before. treat as new request', level=logging.INFO)
-                    handle_new_request(request_id, request, retransmitted)
+                    handle_new_request(request_id, request, retransmitted, signed_request)
                     await_for_result(request_id, 'head-timeout resent new request')
 
         #send('done', to=self)
@@ -334,6 +334,13 @@ class Replica(process):
     # message handler for receiving shuttle going forward in the chain
     def receive(msg=('shuttle', shuttle), from_=predeccessor):
         output('received shuttle', shuttle, 'from', predeccessor, level=logging.INFO)
+        # order_proof = (self.slot + 1, request_id, request, self, self.configuration,
+        #                [signed_order_statement], signed_request)
+        signed_request = shuttle[0][6]
+        decoded_req = ast.literal_eval(signed_request.message.decode())
+        if not verify(signed_request, decoded_req[1], type="client"):
+            output('signature verification failed for request', decoded_req[0], level=logging.INFO)
+            return
         #self.slot = shuttle[0][0]
         request_id = shuttle[0][1]
         request = shuttle[0][2]
