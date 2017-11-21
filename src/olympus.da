@@ -91,13 +91,13 @@ class Olympus(process):
         # if sender is not in current configuration and the proof of misbehaviour is
         # invalid, ignore
         output('received reconfiguration request from ', sender, level=logging.INFO)
-        if reconfiguration_in_process:
+        if self.reconfiguration_in_process:
             return
         if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
             check_proof_of_misbehaviour(proof_of_misbehaviour)):
             output('reconfiguration request not valid.', level=logging.INFO)
             return  # ignore request
-        reconfiguration_in_process = True
+        self.reconfiguration_in_process = True
         for replica in self.configuration:
             output('sending wedge request to ', replica, level=logging.INFO)
             send(('wedge_request'), to=replica)
@@ -117,7 +117,7 @@ class Olympus(process):
                 longest_history = []
                 longest_history_replica_id = ""
                 max_slot = -1
-                output('*********************************************************************************************')
+
                 for wedge_stmnt in quorum:
                     # calculate max list history (checkpointed_slot + len(history))
                     replica_hist = wedge_stmnt[1]
@@ -133,15 +133,14 @@ class Olympus(process):
                     self.caught_up_messages = [] # empty it
                     replica_id = wedge_stmnt[0]
                     replica_hist = wedge_stmnt[1]
+                    output('history for replica id,', replica_id, 'is', replica_hist, level=logging.INFO)
                     replica_hist_max_slots = len(replica_hist) + wedge_stmnt[3] # checkpointed_slot + len(history)
                     slots_behind = max_slot - replica_hist_max_slots
                     output('replica', replica_id, 'history has total slots',
                            replica_hist_max_slots, 'and is', slots_behind, 'slots behind' , level=logging.INFO)
-                    history_to_catch_up = longest_history[:slots_behind]
-                    output('sending catch_up request to ', replica_id, 'with history',history_to_catch_up, level=logging.INFO)
+                    history_to_catch_up = longest_history[(len(longest_history)-slots_behind):]
                     output('sending history to catch up', history_to_catch_up, 'to', replica_id, level=logging.INFO)
                     send(('catch_up', history_to_catch_up), to=self.replica_map[replica_id])
-                    # TODO: checkpoint proof
                 await(len(self.caught_up_messages) == len(quorum))
                 output('received', len(quorum), 'caught up messages', level=logging.INFO)
                 # check if hash in caught_up_messages are same
@@ -173,7 +172,6 @@ class Olympus(process):
                         break
                     else:
                         count += 1
-
                 if count == t+1:
                     results_to_send[client_id] = res_quorum[0][2][client_id]
                     request_ids[client_id] = res_quorum[0][3][client_id]
@@ -225,23 +223,19 @@ class Olympus(process):
             for w2 in wedged_statements:
                 if w1 == w2:
                     continue
+                output('comparing history for wedged statements', w1, w2, logging.INFO)
                 # ('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot)
                 checkpoint_diff = w1[3] - w2[3]
-                output(w1[1],w2[1])
-                output('@@@@@@@@@@@@@@', w1[3],w2[3],checkpoint_diff)
                 if checkpoint_diff > 0:
                     w1_hist = w1[1]
                     w2_hist = w2[1][checkpoint_diff:]
                 else:
                     w1_hist = w1[1][-checkpoint_diff:]
                     w2_hist = w2[1]
-
-                output(w1_hist, w2_hist)
                 for slot in range(0, min(len(w1_hist), len(w2_hist))):
                     if w2_hist[slot][2] != w2_hist[slot][2]:
                         output('history inconsistent', level=logging.WARNING)
                         return False
-
         return  True
 
     def is_order_proof_valid(order_proof):

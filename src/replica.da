@@ -178,6 +178,7 @@ class Replica(process):
             output('applying request:', request, level=logging.INFO)
             request_id = order_statement[1]
             result = eval_request(request_id, request)
+        output(self.replica_id, 'dictionary-',self.state_object.state)
         send(('caught_up', sign((self.replica_id, crypto_hash(self.state_object), self.last_evaluated_result,
                                  self.last_evaluated_request_id))), to=self.olympus)
 
@@ -438,8 +439,8 @@ class Replica(process):
     # message handler for receiving checkpt shuttle going forward in the chain
     def receive(msg= ('checkpt_shuttle', checkpt_shuttle)):
         # To test checkpoint code for reconfig
-        if self.slot > 11 and self.position == 2:
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+        # if self.slot > 11 and self.position == 2:
+        #     send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
         self.message_tracker[FailureScenarios.CHECKPOINT] += 1
 
         await(len(self.history) >= checkpt_interval)
