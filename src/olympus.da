@@ -93,20 +93,20 @@ class Olympus(process):
         output('received reconfiguration request from ', sender, level=logging.INFO)
         if self.reconfiguration_in_process:
             return
-        if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
-            check_proof_of_misbehaviour(proof_of_misbehaviour)):
+        if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or
+            result_sent_by_client_valid(proof_of_misbehaviour)):
             output('reconfiguration request not valid.', level=logging.INFO)
             return  # ignore request
         self.reconfiguration_in_process = True
         for replica in self.configuration:
             output('sending wedge request to ', replica, level=logging.INFO)
             send(('wedge_request'), to=replica)
-        await(len(self.wedged_statements) >= (t+1))
+        await(len(self.wedged_statements) >= (self.t+1))
         output('at least t+1 wedged statememnts received. number of wedged statements received-', len(self.wedged_statements), level=logging.INFO)
         valid_quorum = False
         quorum = []
         while not valid_quorum:
-            permutations = itertools.permutations(self.wedged_statements, t+1)
+            permutations = itertools.permutations(self.wedged_statements, self.t+1)
             for quorum_candidate in permutations:
                 if is_history_consistent(quorum_candidate):
                     output('consistent quorum obtained', level=logging.INFO)
@@ -155,13 +155,14 @@ class Olympus(process):
             # check if new wedged statements have arrived
             -- wedgestatements
 
+
         output('valid quorum obtained-', quorum, level=logging.INFO)
         valid_result_quorum = None
         # getting quorum of result statements sent by replicas
         results_to_send = {}
         request_ids = {}
         for client_id in clients:
-            for res_quorum in itertools.permutations(self.caught_up_messages, t+1):
+            for res_quorum in itertools.permutations(self.caught_up_messages, self.t+1):
                 if client_id not in res_quorum[0][2]:
                     break
                 first_hash = crypto_hash(str(res_quorum[0][2][client_id]))
@@ -172,7 +173,7 @@ class Olympus(process):
                         break
                     else:
                         count += 1
-                if count == t+1:
+                if count == self.t+1:
                     results_to_send[client_id] = res_quorum[0][2][client_id]
                     request_ids[client_id] = res_quorum[0][3][client_id]
                     break
@@ -254,8 +255,32 @@ class Olympus(process):
 
         return True
 
-    def check_proof_of_misbehaviour(proof_of_misbehaviour):
-        return True
+    # check if proof of misbehaviour sent by client has some issue or not
+    # if issue is not found in the proof of misbehaviour then reconfiguration request is not valid
+    def result_sent_by_client_valid(proof):
+        result = proof[0]
+        result_proof = proof[1]
+        if len(result_proof) != len(self.configuration):
+            output('result proof verification failed due to insufficient'
+                   ' number of result statements', level=logging.CRITICAL)
+            return False
+        result_hash = crypto_hash(result)
+        count = 0
+        for replica_result_proof in result_proof:
+            decoded_message = ast.literal_eval(replica_result_proof.message.decode())
+            rplca_id = decoded_message[3]
+            if not verify(replica_result_proof, rplca_id) or decoded_message[4] != result_hash:
+                if not verify(replica_result_proof, rplca_id):
+                    output('signature validation failed for replica id', rplca_id, level=logging.CRITICAL)
+                else:
+                    output('result hash is different for', rplca_id, level=logging.CRITICAL)
+            else:
+                count += 1
+        if count != (2 * self.t + 1):
+            output('result proofs are not correct for all replicas or some are missing',
+                   level=logging.CRITICAL)
+            return False
+        return count >= (self.t + 1)
 
     def is_checkpt_shuttle_valid(checkpt_shuttle):
         return True
