@@ -47,7 +47,7 @@ class Client(process):
         if not validate(result, result_proof):
             output('result proof validation failed. sending reconfiguration request',
                    level=logging.CRITICAL)
-            send(('reconfiguration-request', self), to=self.olympus)
+            send(('reconfiguration_request', (result, result_proof), self.client_id), to=self.olympus)
             return
         # matching result from client and result computed at client
         if self.test_case.startswith('verify_result_single_client') \
@@ -138,17 +138,19 @@ class Client(process):
         if count != (2*t + 1):
             output('result proofs are not correct for all replicas or some are missing',
                    level=logging.CRITICAL)
-            #send(('reconfiguration-request', self), to=self.olympus) #TODO
-
+            send(('reconfiguration_request', (result, result_proof), self.client_id), to=self.olympus)
         return count >= (t+1)
 
     def run():
         output("waiting for olympus to contact...", level=logging.INFO)
         await(self.olympus is not None)
         fetch_config()
-
+        FETCH_CONFIG_PERIOD = 10
         workload = list(filter(None, workload.split(';')))
         for i in range(len(workload)):
+            # checking periodically if new configuration available
+            if i % FETCH_CONFIG_PERIOD == 0:
+                fetch_config()
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
             send_request(request_id, request, 0, self.head)
@@ -181,6 +183,7 @@ class Client(process):
         get_state_obj() # get the state object fro the head
         # compare the contents of the dictionary at client and the dictionary
         # sent from replica for every key.
+        output('##################################COMPARING DICTIONARY##################################')
         for key in self.state_object.state:
             if key in self.replica_state_obj.state:
                 if self.state_object.state[key] == self.replica_state_obj.state[key]:
@@ -190,7 +193,13 @@ class Client(process):
                     output('object at replica and client do not match for key-', key, level= logging.INFO)
             else:
                 output('key',key, 'not present at client-', self.client_id, level= logging.INFO)
-
+        output('dictionary state at client', self.state_object.state, level=logging.INFO)
+        output('dictionary state at replica', self.replica_state_obj.state, level=logging.INFO)
+        if self.replica_state_obj.state == self.state_object.state:
+            output('dictionary state at replica is same as dictionary state a client', level=logging.INFO)
+        else:
+            output('dictionary state at replica is not same as dictionary state a client', level=logging.INFO)
+        output('########################################################################################')
         if self.test_case.startswith('verify_result_single_client') \
                 or self.test_case.startswith('client_timeout_testcase'):
             output('Number of correct results received at client-', self.result_count)

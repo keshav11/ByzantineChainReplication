@@ -87,27 +87,26 @@ class Olympus(process):
             output('running state message received', decoded_msg, level=logging.INFO)
             self.replica_running_state = decoded_msg[1]
 
-
     def receive(msg=('reconfiguration_request', proof_of_misbehaviour, sender_id), from_= sender):
         # if sender is not in current configuration and the proof of misbehaviour is
         # invalid, ignore
         output('received reconfiguration request from ', sender, level=logging.INFO)
-        if reconfiguration_in_process:
+        if self.reconfiguration_in_process:
             return
-        if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
-            check_proof_of_misbehaviour(proof_of_misbehaviour)):
+        if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or
+            result_sent_by_client_valid(proof_of_misbehaviour)):
             output('reconfiguration request not valid.', level=logging.INFO)
             return  # ignore request
-        reconfiguration_in_process = True
+        self.reconfiguration_in_process = True
         for replica in self.configuration:
             output('sending wedge request to ', replica, level=logging.INFO)
             send(('wedge_request'), to=replica)
-        await(len(self.wedged_statements) >= (t+1))
+        await(len(self.wedged_statements) >= (self.t+1))
         output('at least t+1 wedged statememnts received. number of wedged statements received-', len(self.wedged_statements), level=logging.INFO)
         valid_quorum = False
         quorum = []
         while not valid_quorum:
-            permutations = itertools.permutations(self.wedged_statements, t+1)
+            permutations = itertools.permutations(self.wedged_statements, self.t+1)
             for quorum_candidate in permutations:
                 if is_history_consistent(quorum_candidate):
                     output('consistent quorum obtained', level=logging.INFO)
@@ -117,23 +116,31 @@ class Olympus(process):
                     continue
                 longest_history = []
                 longest_history_replica_id = ""
-                for wdge_stmnt in quorum:
-                    if len(wdge_stmnt[1]) > len(longest_history):
-                        longest_history = wdge_stmnt[1]
-                        longest_history_replica_id = wdge_stmnt[0]
-                longest_history_len = len(longest_history)
+                max_slot = -1
+
+                for wedge_stmnt in quorum:
+                    # calculate max list history (checkpointed_slot + len(history))
+                    replica_hist = wedge_stmnt[1]
+                    replica_hist_max_slots = len(replica_hist) + wedge_stmnt[3]
+                    if replica_hist_max_slots > max_slot:
+                        longest_history = replica_hist
+                        max_slot = replica_hist_max_slots
+                output('longest history is,', longest_history, level=logging.INFO)
+                output('max number of slots present in history', max_slot)
+                # ('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot)
+                #order_proof = (self.slot + 1, request_id, request, self, self.configuration, [signed_order_statement])
                 for wedge_stmnt in quorum:
                     self.caught_up_messages = [] # empty it
                     replica_id = wedge_stmnt[0]
-                    #replica_hist = list(filter(lambda a: a[0] == replica_id, quorum))[0][1]
                     replica_hist = wedge_stmnt[1]
-                    replica_hist_len = len(replica_hist)
-                    output('replica', replica_id, 'history is', replica_hist, 'of len',
-                           replica_hist_len , level=logging.INFO)
-                    output('sending catch_up request to ', replica_id, level=logging.INFO)
-                    output('sending history to catch up', longest_history[replica_hist_len:], level=logging.INFO)
-                    send(('catch_up', longest_history[replica_hist_len:]), to=self.replica_map[replica_id])
-                    # TODO: checkpoint proof
+                    output('history for replica id,', replica_id, 'is', replica_hist, level=logging.INFO)
+                    replica_hist_max_slots = len(replica_hist) + wedge_stmnt[3] # checkpointed_slot + len(history)
+                    slots_behind = max_slot - replica_hist_max_slots
+                    output('replica', replica_id, 'history has total slots',
+                           replica_hist_max_slots, 'and is', slots_behind, 'slots behind' , level=logging.INFO)
+                    history_to_catch_up = longest_history[(len(longest_history)-slots_behind):]
+                    output('sending history to catch up', history_to_catch_up, 'to', replica_id, level=logging.INFO)
+                    send(('catch_up', history_to_catch_up), to=self.replica_map[replica_id])
                 await(len(self.caught_up_messages) == len(quorum))
                 output('received', len(quorum), 'caught up messages', level=logging.INFO)
                 # check if hash in caught_up_messages are same
@@ -148,21 +155,25 @@ class Olympus(process):
             # check if new wedged statements have arrived
             -- wedgestatements
 
+
         output('valid quorum obtained-', quorum, level=logging.INFO)
         valid_result_quorum = None
         # getting quorum of result statements sent by replicas
         results_to_send = {}
         request_ids = {}
         for client_id in clients:
-            for res_quorum in itertools.permutations(self.caught_up_messages, t+1):
+            for res_quorum in itertools.permutations(self.caught_up_messages, self.t+1):
+                if client_id not in res_quorum[0][2]:
+                    break
                 first_hash = crypto_hash(str(res_quorum[0][2][client_id]))
                 count = 1
                 for i in range(1,len(res_quorum)):
-                    if crypto_hash(str(res_quorum[i][2][client_id])) != first_hash:
+                    if client_id not in res_quorum[i][2] or \
+                                    crypto_hash(str(res_quorum[i][2][client_id])) != first_hash:
                         break
                     else:
                         count += 1
-                if count == t+1:
+                if count == self.t+1:
                     results_to_send[client_id] = res_quorum[0][2][client_id]
                     request_ids[client_id] = res_quorum[0][3][client_id]
                     break
@@ -203,6 +214,8 @@ class Olympus(process):
         output('checking consistency of wedged_statements', wedged_statements, level=logging.INFO)
         # checking order proofs in each wedge statements
         for wedged_statement in wedged_statements:
+            if not is_checkpt_shuttle_valid(wedged_statement):
+                return False
             for order_proof in wedged_statement[1]:
                 if not is_order_proof_valid(order_proof):
                     return False
@@ -211,17 +224,29 @@ class Olympus(process):
             for w2 in wedged_statements:
                 if w1 == w2:
                     continue
-                #('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof)
-                for slot in range(0, min(len(w1[1]), len(w2[1]))):
-                    if w1[1][slot][2] != w2[1][slot][2]:
+                output('comparing history for wedged statements', w1, w2, logging.INFO)
+                # ('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot)
+                checkpoint_diff = w1[3] - w2[3]
+                if checkpoint_diff > 0:
+                    w1_hist = w1[1]
+                    w2_hist = w2[1][checkpoint_diff:]
+                else:
+                    w1_hist = w1[1][-checkpoint_diff:]
+                    w2_hist = w2[1]
+                for slot in range(0, min(len(w1_hist), len(w2_hist))):
+                    if w2_hist[slot][2] != w2_hist[slot][2]:
                         output('history inconsistent', level=logging.WARNING)
                         return False
-            # TODO: check validity of checkpoint proof
         return  True
 
     def is_order_proof_valid(order_proof):
-        # order_proof - (self.slot, request_id, request, self, self.configuration,
-        #                   [signed_order_statement])
+        # order_proof = (self.slot + 1, request_id, request, self, self.configuration,
+        #                [signed_order_statement], signed_request)
+        signed_request = order_proof[6]
+        decoded_req = ast.literal_eval(signed_request.message.decode())
+        if not verify(signed_request, decoded_req[1], type="client"):
+            output('signature verification failed for request', decoded_req[0], level=logging.INFO)
+            return False
         request = order_proof[2]
         # verify order proof for preceding replicas
         for ord_stmnt in order_proof[5]:
@@ -235,7 +260,34 @@ class Olympus(process):
 
         return True
 
-    def check_proof_of_misbehaviour(proof_of_misbehaviour):
+    # check if proof of misbehaviour sent by client has some issue or not
+    # if issue is not found in the proof of misbehaviour then reconfiguration request is not valid
+    def result_sent_by_client_valid(proof):
+        result = proof[0]
+        result_proof = proof[1]
+        if len(result_proof) != len(self.configuration):
+            output('result proof verification failed due to insufficient'
+                   ' number of result statements', level=logging.CRITICAL)
+            return False
+        result_hash = crypto_hash(result)
+        count = 0
+        for replica_result_proof in result_proof:
+            decoded_message = ast.literal_eval(replica_result_proof.message.decode())
+            rplca_id = decoded_message[3]
+            if not verify(replica_result_proof, rplca_id) or decoded_message[4] != result_hash:
+                if not verify(replica_result_proof, rplca_id):
+                    output('signature validation failed for replica id', rplca_id, level=logging.CRITICAL)
+                else:
+                    output('result hash is different for', rplca_id, level=logging.CRITICAL)
+            else:
+                count += 1
+        if count != (2 * self.t + 1):
+            output('result proofs are not correct for all replicas or some are missing',
+                   level=logging.CRITICAL)
+            return False
+        return count >= (self.t + 1)
+
+    def is_checkpt_shuttle_valid(checkpt_shuttle):
         return True
 
     def terminate_all_replicas():
@@ -246,8 +298,6 @@ class Olympus(process):
         self.all_replicas_public_keys = {}
         self.configuration = []  # current configuration
         self.replica_map = {}
-
-
 
     def create_configuration(state_obj=None):
         """ creating num_replica replicas """
