@@ -147,9 +147,12 @@ class Client(process):
         output("waiting for olympus to contact...", level=logging.INFO)
         await(self.olympus is not None)
         fetch_config()
-
+        FETCH_CONFIG_PERIOD = 10
         workload = list(filter(None, workload.split(';')))
         for i in range(len(workload)):
+            # checking periodically is new configuration available
+            if i % FETCH_CONFIG_PERIOD == 0:
+                fetch_config()
             request = workload[i].strip()
             request_id = client_id + '_' + str(i)
             send_request(request_id, request, 0, self.head)
