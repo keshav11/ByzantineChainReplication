@@ -99,10 +99,11 @@ class Client(process):
             v_key = nacl.signing.VerifyKey(self.olympus_pub_key,
                                            encoder=nacl.encoding.HexEncoder)
         try:
-            v_key.verify(data.message,data.signature)
+            v_key.verify(data)
         except nacl.exceptions.BadSignatureError:
             return False
-
+        except:
+            return False
         output('signature verified', level= logging.DEBUG)
         return True
 
