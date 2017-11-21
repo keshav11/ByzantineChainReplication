@@ -150,7 +150,7 @@ class Client(process):
         FETCH_CONFIG_PERIOD = 10
         workload = list(filter(None, workload.split(';')))
         for i in range(len(workload)):
-            # checking periodically is new configuration available
+            # checking periodically if new configuration available
             if i % FETCH_CONFIG_PERIOD == 0:
                 fetch_config()
             request = workload[i].strip()
