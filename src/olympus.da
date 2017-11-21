@@ -92,9 +92,10 @@ class Olympus(process):
         # if sender is not in current configuration and the proof of misbehaviour is
         # invalid, ignore
         output('received reconfiguration request from ', sender, level=logging.INFO)
-        if reconfiguration_in_process: return
+        if reconfiguration_in_process:
+            return
         if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or not
-        check_proof_of_misbehaviour(proof_of_misbehaviour)):
+            check_proof_of_misbehaviour(proof_of_misbehaviour)):
             output('reconfiguration request not valid.', level=logging.INFO)
             return  # ignore request
         reconfiguration_in_process = True
