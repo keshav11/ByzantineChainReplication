@@ -700,7 +700,6 @@ class Replica(process):
         output('state object at this moment is', level=logging.INFO)
         print_state_object()
 
-<<<<<<< HEAD
     def get_invalid_signature(signed_msg):
         output('creating invalid signature for ', signed_msg, level=logging.INFO)
         signed_list = list(signed_msg)
