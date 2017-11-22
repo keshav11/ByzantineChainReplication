@@ -133,7 +133,7 @@ class Olympus(process):
                         longest_history = replica_hist
                         max_slot = replica_hist_max_slots
                 output('longest history is,', longest_history, level=logging.INFO)
-                output('max number of slots present in history', max_slot)
+                output('max number of slots present in history', max_slot, level=logging.INFO)
                 # ('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot)
                 #order_proof = (self.slot + 1, request_id, request, self, self.configuration, [signed_order_statement])
                 for wedge_stmnt in quorum:
@@ -231,7 +231,7 @@ class Olympus(process):
             for w2 in wedged_statements:
                 if w1 == w2:
                     continue
-                output('comparing history for wedged statements', w1, w2, logging.INFO)
+                output('comparing history for wedged statements', w1, w2, level=logging.INFO)
                 # ('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot)
                 checkpoint_diff = w1[3] - w2[3]
                 if checkpoint_diff > 0:
@@ -338,7 +338,7 @@ class Olympus(process):
         send(('done'), to=self.bcr_main)
         #await(received(('done')))
 
-        output('olympus run finished!')
+        output('olympus run finished!', level=logging.INFO)
 
     def send_client_public_keys_to_replicas():
         output('sending all_clients_public_keys to replicas', level=logging.INFO)

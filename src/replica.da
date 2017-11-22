@@ -80,7 +80,6 @@ class Replica(process):
         self.last_evaluated_result = {}
         self.last_evaluated_request_id = {}
         self.sent_reconfig_request = False
-        output('failure scen are', failure_scenarios, level=logging.INFO)
         output('replica setup completed', level=logging.DEBUG)
 
     def sign(data):
@@ -177,17 +176,20 @@ class Replica(process):
                 break
 
         if (action and 'truncate_history' in action) or pending:
-            output('!!! taking on pending', level=logging.INFO)
+            output('truncating history...', level=logging.INFO)
             pending_to_injected(scenario)
             n = int(scenario[scenario.find('truncate_history')+17])
-            output('!!! taking on pending n is', n, level=logging.INFO)
+            output('actual len history', len(self.history), 'history is', self.history, level=logging.INFO)
+            output('sending len history', len(self.history[:-n]), 'history as', self.history[:-n], level=logging.INFO)
+            output('about to send wedge statement. checkpointed slot is', self.checkpointed_slot, level=logging.INFO)
             pickled_wedged_stmnt = pickle.dumps(
                 (self.replica_id, self.history[:-n], self.last_checkpoint_proof, self.checkpointed_slot))
             send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
+            output('sent wedged statement to', self.olympus, level=logging.INFO)
         else:
             output('about to send wedge statement. checkpointed slot is', self.checkpointed_slot, level=logging.INFO)
             pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot))
-            output('!! sending to olympus', self.olympus, 'wedge stmt - ', pickled_wedged_stmnt, level=logging.INFO)
+            output('sending to olympus wedge stmt - ', pickled_wedged_stmnt, level=logging.INFO)
             send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
             output('sent wedged statement to', self.olympus, level=logging.INFO)
 
@@ -196,7 +198,8 @@ class Replica(process):
         output('received catch up message from olympus', level=logging.INFO)
         action, trigger, scenario = check_failure_scenario()
         if action:
-            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
+            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig',
+                                        'invalid_result_sig', 'truncate_history']
             ignore_fail_scen = [fail_scen for fail_scen in ignore_failure_scenarios if fail_scen in action]
             if ignore_fail_scen:
                 output('Failure scenario', scenario, 'encountered. It wont have any effect', level=logging.INFO)
@@ -220,7 +223,7 @@ class Replica(process):
             output('applying request:', request, level=logging.INFO)
             request_id = order_statement[1]
             result = eval_request(request_id, request)
-        output(self.replica_id, 'dictionary-',self.state_object.state)
+        output(self.replica_id, 'dictionary-',self.state_object.state, level=logging.INFO)
         send(('caught_up', sign((self.replica_id, crypto_hash(self.state_object), self.last_evaluated_result,
                                  self.last_evaluated_request_id))), to=self.olympus)
 
@@ -233,7 +236,8 @@ class Replica(process):
         output('received get running state message from olympus', level=logging.INFO)
         action, trigger, scenario = check_failure_scenario()
         if action:
-            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
+            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig',
+                                        'invalid_result_sig', 'truncate_history']
             ignore_fail_scen = [fail_scen for fail_scen in ignore_failure_scenarios if fail_scen in action]
             if ignore_fail_scen:
                 output('Failure scenario', scenario, 'encountered. It wont have any effect', level=logging.INFO)
@@ -261,7 +265,7 @@ class Replica(process):
         action, trigger, scenario = check_failure_scenario()
         if action:
             put_pending_scenarios_type = ['change_operation', 'change_result', 'drop_checkpt_stmts',
-                                          'invalid_order_sig', 'invalid_result_sig']
+                                          'invalid_order_sig', 'invalid_result_sig', 'truncate_history']
             pending_scen_type = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scen_type:
                 put_in_pending(scenario)
@@ -321,7 +325,9 @@ class Replica(process):
             elif 'increment_slot' in action:
                 inject_increment_slot(action, trigger, scenario)
             elif 'drop_checkpt_stmts' in action:
-                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+                put_in_pending(scenario)
+            elif 'truncate_history' in action:
+                put_in_pending(scenario)
 
         pending = False
         are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
@@ -483,13 +489,13 @@ class Replica(process):
             elif 'increment_slot' in action:
                 inject_increment_slot(action, trigger, scenario)
             elif 'drop_checkpt_stmts' in action:
-                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
-                output('!! put in failures pending', self.failures, level=logging.INFO)
+                put_in_pending(scenario)
+            elif 'truncate_history' in action:
+                put_in_pending(scenario)
 
         pending = False
         are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
         for failure in self.failures[PENDING].get(self.configuration_number, []):
-            output('checking for change_operation in', failure, level=logging.INFO)
             pending_fail_type = [fail_type for fail_type in are_pending_failures_type if fail_type in failure]
             if pending_fail_type:
                 scenario = failure
@@ -564,7 +570,8 @@ class Replica(process):
             return
 
         if action:
-            put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'invalid_order_sig', 'invalid_result_sig']
+            put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'invalid_order_sig',
+                                          'invalid_result_sig', 'truncate_history']
             pending_scen_type = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scen_type:
                 put_in_pending(scenario)
@@ -586,8 +593,6 @@ class Replica(process):
                 inject_extra_op(action, trigger, scenario)
             elif 'increment_slot' in action:
                 inject_increment_slot(action, trigger, scenario)
-            # elif 'drop_checkpt_stmts' in action:
-            #     self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
 
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
@@ -614,7 +619,7 @@ class Replica(process):
         action, trigger, scenario = check_failure_scenario()
         if action:
             put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'change_result',
-                                          'invalid_order_sig', 'invalid_result_sig']
+                                          'invalid_order_sig', 'invalid_result_sig', 'truncate_history']
             pending_scen_type = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scen_type:
                 put_in_pending(scenario)
@@ -630,8 +635,6 @@ class Replica(process):
                 inject_extra_op(action, trigger, scenario)
             elif 'increment_slot' in action:
                 inject_increment_slot(action, trigger, scenario)
-            # elif 'drop_checkpt_stmts' in action:
-            #     self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
 
         checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True)), self.replica_id))
         checkpt_shuttle.append(checkpt_stmt)
@@ -662,7 +665,8 @@ class Replica(process):
 
         action, trigger, scenario = check_failure_scenario()
         if action:
-            put_pending_scenarios_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
+            put_pending_scenarios_type = ['change_operation', 'change_result', 'invalid_order_sig',
+                                          'invalid_result_sig', 'truncate_history']
             pending_scenario = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scenario:
                 put_in_pending(scenario)
@@ -703,7 +707,7 @@ class Replica(process):
 
     def run():
         await(received(('done')))
-        output("replica: run finished")
+        output("replica: run finished", level=logging.INFO)
 
     def await_for_result(request_id, timeout_id):
         if await(request_id in self.result_cache):
@@ -749,7 +753,7 @@ class Replica(process):
                                     scenario not in self.failures[INJECTED].get(self.configuration_number, []) and \
                                     scenario not in self.failures[PENDING].get(self.configuration_number, []):
                         #self.failures[PENDING].setdefault(self.configuration_number, []).append(search_str)
-                        output('FAIL ! Detected failure scenario', scenario, 'action is to', scenario.split(search_str+',')[1],
+                        output('FAIL ! Detected failure scenario', scenario, 'search str was', search_str,
                                level=logging.CRITICAL)
                         return scenario.split(search_str+',')[1], search_str, scenario
 
@@ -771,8 +775,11 @@ class Replica(process):
         return False, None, None
 
     def put_in_pending(scenario):
-        self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
-        output('putting scenario', scenario,'in pending. failures are', self.failures, level=logging.INFO)
+        try:
+            self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            output('putting scenario', scenario,'in pending. failures are', self.failures, level=logging.INFO)
+        except Exception:
+            output("exception while putting failure scenario", scenario, "in pending", level=logging.INFO)
 
     def pending_to_injected(scenario):
         try:
@@ -798,7 +805,7 @@ class Replica(process):
         new_signed = bytes(signed_list)
         invalid_signed_msg = nacl.signing.SignedMessage._from_parts(signed_msg._signature,
                                                                     signed_msg._message, new_signed)
-        output('invalid signed msg created', invalid_signed_msg)
+        output('invalid signed msg created', invalid_signed_msg, level=logging.CRITICAL)
         return invalid_signed_msg
 
     def inject_increment_slot(action, trigger, scenario):
