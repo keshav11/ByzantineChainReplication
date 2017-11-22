@@ -164,6 +164,8 @@ class Replica(process):
                 inject_extra_op(action, trigger, scenario)
             elif 'drop_checkpt_stmts' in action:
                 self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
 
         self.mode = Modes.IMMUTABLE
 
@@ -210,6 +212,8 @@ class Replica(process):
                 inject_extra_op(action, trigger, scenario)
             elif 'drop_checkpt_stmts' in action:
                 self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
 
         for order_statement in hist_suffix:
             request = order_statement[2]
@@ -245,6 +249,8 @@ class Replica(process):
                 inject_extra_op(action, trigger, scenario)
             elif 'drop_checkpt_stmts' in action:
                 self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
 
         pickled_state = pickle.dumps((self.replica_id, self.state_object))
         send(('running_state', sign(pickled_state)), to=self.olympus)
@@ -387,7 +393,7 @@ class Replica(process):
             request = decoded_req[2]
             retransmitted = decoded_req[3]
         output("received request with id", request_id, "retransmitted", retransmitted, "from", sender,
-               level=logging.INFO)
+               "next slot", self.slot+1, level=logging.INFO)
         client_no = int(request_id.split('_')[0].strip('client'))
         if not retransmitted:
             self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
@@ -405,19 +411,21 @@ class Replica(process):
                 output('Replica is in immutable mode. Ignoring client request', level=logging.INFO)
                 return  # TODO: return error
             elif is_correct(self) and request_id in self.result_cache:
-                output('result already in cache. send result to client', level=logging.INFO)
+                output('Section 3.3 case 1 result already in cache. send result to client', level=logging.INFO)
                 client = clients[request_id.split('_')[0]]
                 cached_result = self.result_cache[request_id]
                 send(('result', cached_result[0], cached_result[1]), to=client)
             elif self.position != 0: # not head
-                output('current position is not head. so forward request to head', level=logging.INFO)
+                output('current replica is not head. so forward request to head', level=logging.INFO)
                 send(('request', request_id, request, 1), to= self.configuration[0])
                 await_for_result(request_id, 'nonhead-timeout') # passing id to know which timer expired
             else:
                 if is_request_pending(request_id): # Head has seen the request
+                    output('Section 3.3 case 2 head has already seen the request, starting timer.', level=logging.INFO)
                     await_for_result(request_id, 'head-timeout pending request')
                 else: # head has not seen this request
-                    output('not seen this request before. treat as new request', level=logging.INFO)
+                    output('Section 3.3 case 3 head has not seen this request before. '
+                           'treat as new request', level=logging.INFO)
                     handle_new_request(request_id, request, retransmitted, signed_request)
                     await_for_result(request_id, 'head-timeout resent new request')
 
