@@ -16,6 +16,7 @@ import time
 INJECTED = "injected"
 PENDING = "pending"
 
+
 class FailureScenarios(Enum):
     CLIENT_REQUEST = "client_request"
     FORWARDED_REQUEST = "forwarded_request"
@@ -144,37 +145,65 @@ class Replica(process):
     def receive(msg=('wedge_request'), from_=sender):
         self.message_tracker[FailureScenarios.WEDGE_REQUEST] += 1
         output('received wedge request from olympus', level=logging.INFO)
-        action, trigger = check_failure_scenario()
+        action, trigger, scenario = check_failure_scenario()
         if action:
             if 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'change_operation' in action:
+                output('Failure scenario', scenario,'encountered. It wont have any effect', level=logging.INFO)
+
         self.mode = Modes.IMMUTABLE
-        pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot))
-        send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
+
+        pending = False
+        for failure in self.failures[PENDING].get(self.configuration_number, []):
+            if 'truncate_history' in failure:
+                scenario = failure
+                pending = True
+                break
+
+        if (action and 'truncate_history' in action) or pending:
+            output('!!! taking on pending', level=logging.INFO)
+            pending_to_injected(scenario)
+            n = int(scenario[scenario.find('truncate_history')+17])
+            output('!!! taking on pending n is', n, level=logging.INFO)
+            pickled_wedged_stmnt = pickle.dumps(
+                (self.replica_id, self.history[:-n], self.last_checkpoint_proof, self.checkpointed_slot))
+            send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
+        else:
+            output('!!! taking on usual', level=logging.INFO)
+            pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot))
+            send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
 
     def receive(msg=('catch_up', hist_suffix), from_=sender):
         self.message_tracker[FailureScenarios.CATCH_UP] += 1
         output('received catch up message from olympus', level=logging.INFO)
-        action, trigger = check_failure_scenario()
+        action, trigger, scenario = check_failure_scenario()
         if action:
             if 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'change_operation' in action:
+                output('Failure scenario', scenario,'encountered. It wont have any effect', level=logging.INFO)
+
         for order_statement in hist_suffix:
             request = order_statement[2]
             output('applying request:', request, level=logging.INFO)
@@ -191,35 +220,47 @@ class Replica(process):
     def receive(msg=('get_running_state'), from_=sender):
         self.message_tracker[FailureScenarios.GET_RUNNING_STATE] += 1
         output('received get running state message from olympus', level=logging.INFO)
-        action, trigger = check_failure_scenario()
+        action, trigger, scenario = check_failure_scenario()
         if action:
             if 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'change_operation' in action:
+                output('Failure scenario', scenario,'encountered. It wont have any effect', level=logging.INFO)
+
         pickled_state = pickle.dumps((self.replica_id, self.state_object))
         send(('running_state', sign(pickled_state)), to=self.olympus)
 
     def receive(msg=('config', config, config_no)):
         self.message_tracker[FailureScenarios.NEW_CONFIGURATION] += 1
-        action, trigger = check_failure_scenario()
+        action, trigger, scenario = check_failure_scenario()
         if action:
             if 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+            elif 'change_operation' in action:
+                output('Failure scenario', scenario,'encountered. It wont have any effect', level=logging.INFO)
+
         self.configuration = config
         self.configuration_number = config_no
         output('received config from olympus', level=logging.INFO)
@@ -235,32 +276,45 @@ class Replica(process):
     def handle_new_request(request_id, request, retransmitted, signed_request):
         output('received new request', request, 'with id', request_id, level=logging.INFO)
         event = 'forwarded_request' if retransmitted else 'client_request'
-        action, trigger = check_failure_scenario(request_id=request_id, event=event)
+        action, trigger, scenario = check_failure_scenario(request_id=request_id, event=event)
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes present in history
-            output('holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
+            output('Mode is not active or there are holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         operation = request
         ok_hash = ''
         if action:
-            if 'change_operation' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                operation = "get('x')"
-            elif 'change_result' in action:
+            if 'change_result' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 ok_hash = crypto_hash('OK')
             elif 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+
+        pending = False
+        for failure in self.failures[PENDING].get(self.configuration_number, []):
+            output('checking for change_opeattion in', failure, level=logging.INFO)
+            if 'change_operation' in failure:
+                scenario = failure
+                pending = True
+                break
+        output('pending is', pending, level=logging.INFO)
+        if (action and 'change_operation' in action) or pending:
+            pending_to_injected(scenario)
+            operation = "get('x')"
 
         order_statement = ('order', self.slot+1, operation, self.replica_id)
         signed_order_statement = sign(order_statement)  # sign order statement
@@ -282,8 +336,9 @@ class Replica(process):
 
         # checkpointing
         if checkpt_interval != 0 and self.slot % checkpt_interval == 0:
-            output('CPT !! taking checkpoint. current slot is', self.slot, level=logging.INFO)
-            checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True))))
+            output('CPT !! initiating checkpoint shuttle. current slot is', self.slot, 'hash is',
+                   crypto_hash(json.dumps(self.state_object.state, sort_keys=True)), level=logging.INFO)
+            checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True)), self.replica_id))
             checkpt_shuttle = [checkpt_stmt]
             send(('checkpt_shuttle', checkpt_shuttle), to=self.configuration[self.position + 1])
 
@@ -312,13 +367,14 @@ class Replica(process):
             else:
                 self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
 
-            if is_correct(self) and request_id in self.result_cache:
+            if self.mode == Modes.IMMUTABLE:
+                output('Replica is in immutable mode. Ignoring client request', level=logging.INFO)
+                return  # TODO: return error
+            elif is_correct(self) and request_id in self.result_cache:
                 output('result already in cache. send result to client', level=logging.INFO)
                 client = clients[request_id.split('_')[0]]
                 cached_result = self.result_cache[request_id]
                 send(('result', cached_result[0], cached_result[1]), to=client)
-            elif self.mode == Modes.IMMUTABLE:
-                return  # TODO: return error
             elif self.position != 0: # not head
                 output('current position is not head. so forward request to head', level=logging.INFO)
                 send(('request', request_id, request, 1), to= self.configuration[0])
@@ -349,7 +405,7 @@ class Replica(process):
 
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][FailureScenarios.SHUTTLE] += 1
-        action, trigger = check_failure_scenario(request_id=request_id, event='shuttle')
+        action, trigger, scenario = check_failure_scenario(request_id=request_id, event='shuttle')
         if not is_shuttle_valid(shuttle):
             output('order proof invalid. sending reconfiguration request', level=logging.CRITICAL)
             send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
@@ -362,22 +418,37 @@ class Replica(process):
         operation = request
         ok_hash = ''
         if action:
-            if 'change_operation' in action:
-                operation = "get('x')"
-            elif 'change_result' in action:
+            if 'change_result' in action:
                 ok_hash = crypto_hash('OK')
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
             elif 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+                output('!! put in failures pending', self.failures, level=logging.INFO)
+
+        pending = False
+        for failure in self.failures[PENDING].get(self.configuration_number, []):
+            output('checking for change_opeattion in', failure, level=logging.INFO)
+            if 'change_operation' in failure:
+                scenario = failure
+                pending = True
+                break
+        output('pending is', pending, level=logging.INFO)
+        if (action and 'change_operation' in action) or pending:
+            pending_to_injected(scenario)
+            operation = "get('x')"
 
         order_statement = ('order', self.slot+1, operation, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
@@ -414,7 +485,7 @@ class Replica(process):
         request = shuttle[0][2]
         client_no = int(request_id.split('_')[0].strip('client'))
         self.client_requests_tracker[client_no][FailureScenarios.RESULT_SHUTTLE] += 1
-        action, trigger = check_failure_scenario(request_id=request_id, event='result_shuttle')
+        action, trigger, scenario = check_failure_scenario(request_id=request_id, event='result_shuttle')
 
         if not is_result_shuttle_valid(result, shuttle):
             output('shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
@@ -433,15 +504,19 @@ class Replica(process):
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
             elif 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
+            elif 'drop_checkpt_stmts' in action:
+                self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
 
         self.result_cache[request_id] = (result, shuttle[1])
         if self.position != 0:
@@ -454,37 +529,38 @@ class Replica(process):
         # if self.slot > 11 and self.position == 2:
         #     send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
         self.message_tracker[FailureScenarios.CHECKPOINT] += 1
-
+        output('CPT !! received checkpt shuttle. position is', self.position, 'slot is', self.slot,
+               'len of history is', len(self.history), level=logging.INFO)
         await(len(self.history) >= checkpt_interval)
-        action, trigger = check_failure_scenario()
+        action, trigger, scenario = check_failure_scenario()
         if action:
-            if 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
+            pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts']
+            pending_scen_type = [scen_type for scen_type in pending_scenarios_type if scen_type in action]
+            if pending_scen_type:
+                put_in_pending(scenario)
+            elif 'crash' in action:
+                inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
-            elif 'drop' in action:
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
                 return
             elif 'extra_op' in action:
-                inject_extra_op(action, trigger)
+                inject_extra_op(action, trigger, scenario)
             elif 'increment_slot' in action:
-                inject_increment_slot(action, trigger)
+                inject_increment_slot(action, trigger, scenario)
+            # elif 'drop_checkpt_stmts' in action:
+            #     self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
 
-        output('CPT !! received checkpt shuttle. position is', self.position, 'slot is', self.slot,
-               'len of history is', len(self.history), level=logging.INFO)
-        checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True))))
+        checkpt_stmt = sign(('checkpoint', crypto_hash(json.dumps(self.state_object.state, sort_keys=True)), self.replica_id))
         checkpt_shuttle.append(checkpt_stmt)
 
         if self.position != len(self.configuration) - 1:  # it is not tail replica
             send(('checkpt_shuttle', checkpt_shuttle), to=self.configuration[self.position + 1])
         else:
             if is_checkpt_shuttle_valid(checkpt_shuttle):
-                # TODO - interval or k*interval
                 del self.history[:checkpt_interval]
-                #self.slot -= checkpt_interval
                 self.last_checkpoint_proof = checkpt_shuttle
                 self.checkpointed_slot += checkpt_interval
             if self.position != 0:
@@ -493,37 +569,54 @@ class Replica(process):
     def receive(msg= ('checkpt_proof', checkpt_proof)):
 
         self.message_tracker[FailureScenarios.COMPLETED_CHECKPOINT] += 1
-        action, trigger = check_failure_scenario()
-        if action:
-            if 'crash' in action:
-                pending_to_injected(action, trigger)
-                logging.shutdown()
-                os._exit(-1)
-            elif 'sleep' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                time.sleep(float(action.strip('sleep()')) / 1000.0)
-            elif 'drop' in action:
-                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-                return
-            elif 'extra_op' in action:
-                inject_extra_op(action, trigger)
-            elif 'increment_slot' in action:
-                inject_increment_slot(action, trigger)
-
         output('CPT !! received checkpt proof - ', checkpt_proof, level=logging.INFO)
         output('CPT !! received checkpt proof. position is', self.position, 'slot is', self.slot,
                'len of history is', len(self.history), level=logging.INFO)
-        if is_checkpt_shuttle_valid(checkpt_proof):
+        action, trigger, scenario = check_failure_scenario()
+        if action:
+            pending_scenarios_type = ['change_operation']
+            pending_scenario = [scen_type for scen_type in pending_scenarios_type if scen_type in action]
+            if pending_scenario:
+                put_in_pending(scenario)
+            elif 'crash' in action:
+                inject_crash(action, trigger, scenario)
+            elif 'sleep' in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                time.sleep(float(action.strip('sleep()')) / 1000.0)
+            elif 'drop' in action and 'drop_checkpt_stmts' not in action:
+                output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                return
+            elif 'extra_op' in action:
+                inject_extra_op(action, trigger, scenario)
+            elif 'increment_slot' in action:
+                inject_increment_slot(action, trigger, scenario)
+
+        if is_checkpt_proof_shuttle_valid(checkpt_proof):
             del self.history[:checkpt_interval]
             #self.slot -= checkpt_interval
             self.last_checkpoint_proof = checkpt_proof
             self.checkpointed_slot += checkpt_interval
+            output('CPT !! checkpointed slot updated to', self.checkpointed_slot, 'last_checkpoint_proof is',
+                   self.last_checkpoint_proof, level=logging.INFO)
+            output('CPT !! updated history is', self.history, level=logging.INFO)
+        else:
+            output('checkpt proof validation failed', level=logging.CRITICAL)
+            return
 
         if self.position != 0:
-            send(('checkpt_proof', checkpt_proof), to=self.configuration[self.position-1])
+            pending=False
+            for failure in self.failures[PENDING].get(self.configuration_number, []):
+                if 'drop_checkpt_stmts' in failure:
+                    scenario = failure
+                    pending = True
+                    break
 
-        output('CPT !! checkpointed slot updated to', self.checkpointed_slot, 'last_checkpoint_proof is', self.last_checkpoint_proof, level=logging.INFO)
-        output('CPT !! updated history is', self.history, level=logging.INFO)
+            if (action and 'drop_checkpt_stmts' in action) or pending:
+                pending_to_injected(scenario)
+                t = int((len(self.configuration)-1)/2)
+                send(('checkpt_proof', checkpt_proof[t+1:]), to=self.configuration[self.position - 1])
+            else:
+                send(('checkpt_proof', checkpt_proof), to=self.configuration[self.position-1])
 
     def run():
         await(received(('done')))
@@ -559,50 +652,55 @@ class Replica(process):
         if failure_scenarios and failure_scenarios.get(self.configuration_number):
             scenarios = failure_scenarios[self.configuration_number].split(';')
             if not scenarios:
-                return False, None
+                return False, None, None
 
             for probable_fail_scen in self.message_tracker:
                 m = self.message_tracker[probable_fail_scen]
                 search_str = probable_fail_scen.value + '(' + str(m) + ')'
                 #output('message tracker, search str is', search_str, level=logging.INFO)
                 for scenario in scenarios:
-                    if search_str in scenario and search_str not in self.failures[INJECTED]\
-                            .get(self.configuration_number, []):
-                        self.failures[PENDING].setdefault(self.configuration_number, []).append(search_str)
+                    if search_str in scenario and scenario.startswith(probable_fail_scen.value) and \
+                                    scenario not in self.failures[INJECTED].get(self.configuration_number, []) and \
+                                    scenario not in self.failures[PENDING].get(self.configuration_number, []):
+                        #self.failures[PENDING].setdefault(self.configuration_number, []).append(search_str)
                         output('FAIL ! Detected failure scenario', scenario, 'action is to', scenario.split(search_str+',')[1],
                                level=logging.CRITICAL)
-                        output('FAIL ! failures dict is', self.failures, level=logging.INFO)
-                        return scenario.split(search_str+',')[1], search_str
+                        return scenario.split(search_str+',')[1], search_str, scenario
 
             if client_no is None:
-                return False, None
+                return False, None, None
             for probable_fail_scen in self.client_requests_tracker[client_no]:
                 m = self.client_requests_tracker[client_no][probable_fail_scen]
                 search_str = '(' + str(client_no) + ',' + str(m) + '),'
                 for scenario in scenarios:
                     scenario = scenario.strip(' ')
-                    if search_str in scenario and scenario.startswith(event):
+                    if search_str in scenario and scenario.startswith(event) and \
+                        scenario not in self.failures[INJECTED].get(self.configuration_number, []) and \
+                        scenario not in self.failures[PENDING].get(self.configuration_number, []):
                         output('FAIL ! Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1],
                                level=logging.CRITICAL)
-                        return scenario.split(search_str)[1], event+search_str
-        return False, None
+                        return scenario.split(search_str)[1], event+search_str, scenario
+        return False, None, None
 
-    def pending_to_injected(action, trigger):
+    def put_in_pending(scenario):
+        self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
+        output('put scenario', scenario,'in pending. failures are', self.failures, level=logging.INFO)
+
+    def pending_to_injected(scenario):
         try:
-            output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
-            self.failures.get(INJECTED, []).setdefault(self.configuration_number, []).append(trigger)
-            self.failures.get(PENDING, []).get(self.configuration_number, []).remove(trigger)
-            output('moved from pending to injected. failures are', self.failures, level=logging.INFO)
+            self.failures.get(PENDING, []).get(self.configuration_number, []).remove(scenario)
+            self.failures.get(INJECTED, []).setdefault(self.configuration_number, []).append(scenario)
+            output('moving from pending to injected. failures are', self.failures, level=logging.INFO)
         except e:
-            output("exception while moving failure scenario from pending to injected : ", str(e), level=logging.INFO)
+            output("exception while moving failure scenario", scenario,"from pending to injected : ", str(e), level=logging.INFO)
 
-    def inject_extra_op(action, trigger):
-        pending_to_injected(action, trigger)
+    def inject_extra_op(action, trigger, scenario):
         request = "put('a','a')"
         self.state_object.evaluate_request(request)
         output('state object at this moment is', level=logging.INFO)
         print_state_object()
 
+<<<<<<< HEAD
     def get_invalid_signature(signed_msg):
         output('creating invalid signature for ', signed_msg, level=logging.INFO)
         signed_list = list(signed_msg)
@@ -613,11 +711,14 @@ class Replica(process):
         output('invalid signed msg created', invalid_signed_msg)
         return invalid_signed_msg
 
-    def inject_increment_slot(action, trigger):
-        pending_to_injected(action, trigger)
+    def inject_increment_slot(action, trigger, scenario):
         if self.position == 0:
             self.slot += 1
             output('injecting increment slot, slot now is', self.slot, level=logging.INFO)
+
+    def inject_crash(action, trigger, scenario):
+        logging.shutdown()
+        os._exit(-1)
 
     # if request is in history and not in result cache then it is pending
     def is_request_pending(req_id):
@@ -708,8 +809,28 @@ class Replica(process):
 
         return True
 
+    def is_checkpt_proof_shuttle_valid(checkpt_proof):
+
+        if len(checkpt_proof) != len(self.configuration):
+            output('checkpt shuttle verification failed due to insufficient number of checkpt statements',
+                   level=logging.CRITICAL)
+            return False
+
+        state_hash = None
+        for checkpt in checkpt_proof:
+            decoded_message = ast.literal_eval(checkpt.message.decode())
+            rplca_id = decoded_message[2]
+            rplca_state_hash = decoded_message[1]
+            state_hash = rplca_state_hash if state_hash is None else state_hash
+            if not verify(checkpt, rplca_id) or rplca_state_hash != state_hash:
+                output('checkpt shuttle verification failed for replica', rplca_id, level=logging.CRITICAL)
+                return False
+
+        return True
+
     def is_checkpt_shuttle_valid(checkpt_shuttle):
         return True
+
 
 def main():
     pass

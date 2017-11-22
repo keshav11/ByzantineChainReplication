@@ -3,8 +3,8 @@
 # DONE: validating dictionary
 # DONE: detect proof of misbehavior and send reconfig request
 # DONE: ask olympus if config changed periodically
-# TODO: adding validation of client request by each replica
-# TODO: add validation of client request signatures by olympus
+# DONE: adding validation of client request by each replica
+# DONE: add validation of client request signatures by olympus
 # DONE: use of checkpoint proof during reconfiguration
 # DONE: proof of misbehaviour
 # TODO: how many retries are required by client?

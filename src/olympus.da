@@ -220,7 +220,8 @@ class Olympus(process):
         output('checking consistency of wedged_statements', wedged_statements, level=logging.INFO)
         # checking order proofs in each wedge statements
         for wedged_statement in wedged_statements:
-            if not is_checkpt_shuttle_valid(wedged_statement):
+            # TODO
+            if not is_checkpoint_proof_shuttle_valid(wedged_statement[2]):
                 return False
             for order_proof in wedged_statement[1]:
                 if not is_order_proof_valid(order_proof):
@@ -293,7 +294,23 @@ class Olympus(process):
             return False
         return count >= (self.t + 1)
 
-    def is_checkpt_shuttle_valid(checkpt_shuttle):
+    def is_checkpoint_proof_shuttle_valid(checkpt_proof):
+
+        if len(checkpt_proof) != len(self.configuration):
+            output('checkpt shuttle verification failed due to insufficient number of checkpt statements',
+                   level=logging.CRITICAL)
+            return False
+
+        state_hash = None
+        for checkpt in checkpt_proof:
+            decoded_message = ast.literal_eval(checkpt.message.decode())
+            rplca_id = decoded_message[2]
+            rplca_state_hash = decoded_message[1]
+            state_hash = rplca_state_hash if state_hash is None else state_hash
+            if not verify(checkpt, rplca_id) or rplca_state_hash != state_hash:
+                output('checkpt shuttle verification failed for replica', rplca_id, level=logging.CRITICAL)
+                return False
+
         return True
 
     def terminate_all_replicas():

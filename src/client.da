@@ -8,6 +8,9 @@ import nacl.hash
 import nacl.exceptions
 import ast
 
+FETCH_CONFIG_PERIOD = 5
+
+
 class Client(process):
     def setup(client_id, workload, timeout, test_case):
         self.all_replicas_public_keys = {}
@@ -146,7 +149,7 @@ class Client(process):
         output("waiting for olympus to contact...", level=logging.INFO)
         await(self.olympus is not None)
         fetch_config()
-        FETCH_CONFIG_PERIOD = 10
+
         workload = list(filter(None, workload.split(';')))
         for i in range(len(workload)):
             # checking periodically if new configuration available
