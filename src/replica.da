@@ -175,7 +175,6 @@ class Replica(process):
                 scenario = failure
                 pending = True
                 break
-
         if (action and 'truncate_history' in action) or pending:
             output('!!! taking on pending', level=logging.INFO)
             pending_to_injected(scenario)
@@ -646,7 +645,6 @@ class Replica(process):
                 send(('checkpt_proof', checkpt_shuttle), to=self.configuration[self.position-1])
 
     def receive(msg= ('checkpt_proof', checkpt_proof)):
-
         self.message_tracker[FailureScenarios.COMPLETED_CHECKPOINT] += 1
         output('CPT !! received checkpt proof - ', checkpt_proof, level=logging.INFO)
         output('CPT !! received checkpt proof. position is', self.position, 'slot is', self.slot,
@@ -807,6 +805,7 @@ class Replica(process):
             output('injecting increment slot, slot now is', self.slot, level=logging.INFO)
 
     def inject_crash(action, trigger, scenario):
+        output(self.replica_id, 'is crashing...', level=logging.CRITICAL)
         logging.shutdown()
         os._exit(-1)
 
