@@ -544,7 +544,7 @@ class Replica(process):
 
         slot_itr = self.checkpointed_slot+1
         for op in self.history:
-            output('checking lower slots. op', op[0], 'slot_itr', slot_itr, level=logging.INFO)
+            #output('checking lower slots. op', op[0], 'slot_itr', slot_itr, level=logging.INFO)
             if op[0] != slot_itr:
                 return False
             slot_itr+=1

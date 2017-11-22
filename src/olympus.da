@@ -11,7 +11,7 @@ import itertools
 import pickle
 
 class Olympus(process):
-    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, checkpt_interval, t):
+    def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, checkpt_interval, t, bcr_main):
         self.all_replicas_public_keys = {}
         self.all_clients_public_keys = {}
         self.configuration = []  # current configuration
@@ -23,6 +23,7 @@ class Olympus(process):
         self.caught_up_messages = []
         self.replica_running_state = None
         self.reconfiguration_in_process = False
+        self.num_clients_finished = 0
 
     def sign(data):
         return crypto_keys[0].sign(str(data).encode())
@@ -53,12 +54,16 @@ class Olympus(process):
         v_key_hex = v_key.encode(encoder=nacl.encoding.HexEncoder)
         return (s_key, v_key_hex)
 
+    def get_decoded_msg(signed_msg):
+        return ast.literal_eval(signed_msg.message.decode())
+
     def receive(msg=('get_config'), from_= client):
         await(self.reconfiguration_in_process is False)
         send(('config', self.configuration, self.configuration_number, self.all_replicas_public_keys), to=client)
 
-    def get_decoded_msg(signed_msg):
-        return ast.literal_eval(signed_msg.message.decode())
+    def receive(msg=('finished_execution'), from_=client):
+        self.num_clients_finished += 1
+        send(('done'), to=client)
 
     def receive(msg=('wedge_statement', wedged_stmnt), from_=sender):
         # send(('wedge_statement', sign((self.replica_id, self.history, self.last_checkpoint_proof))), to=self.olympus)
@@ -309,8 +314,12 @@ class Olympus(process):
         self.crypto_keys = generate_keys()
         register_to_clients()
         create_configuration()
-        # wait till done not received
-        await(received(('done')))
+        # wait till all clients have finished execution
+        await(self.num_clients_finished == len(self.clients))
+        terminate_all_replicas()
+        send(('done'), to=self.bcr_main)
+        #await(received(('done')))
+
         output('olympus run finished!')
 
     def send_client_public_keys_to_replicas():
@@ -349,7 +358,7 @@ class Olympus(process):
             send(('all_replicas_public_keys', sign(self.all_replicas_public_keys)), to=replica)
             send(('config', self.configuration, self.configuration_number), to=replica)
 
-            send(('done',), to=replica)
+            #send(('done',), to=replica)
 
         output("started all replicas", level=logging.INFO)
 

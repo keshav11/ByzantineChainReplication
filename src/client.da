@@ -172,6 +172,7 @@ class Client(process):
                 output('result sent for request_id', request_id, 'by olympus', level=logging.INFO)
 
         testing()
+        send(('finished_execution'), to=self.olympus)
         await(received(('done')))
         output('client run finished!')
 
