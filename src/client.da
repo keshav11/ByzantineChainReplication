@@ -82,7 +82,8 @@ class Client(process):
                        level=logging.CRITICAL)
 
     def send_request(request_id, request, is_retrasmitted, recipient):
-        output("sending request with id ", request_id, " and request workload ", request, "to", recipient)
+        output("sending request with id", request_id, "and request workload", request,
+               "to", recipient, level=logging.INFO)
         signed_request = sign((request_id, self.client_id, request, is_retrasmitted))
         send(('request', signed_request), to=recipient)
 
@@ -119,7 +120,7 @@ class Client(process):
             output('result proof verification failed due to insufficient'
                    ' number of result statements', level=logging.CRITICAL)
             return False
-        output('validating result...')
+        output('validating result...', level=logging.INFO)
         result_hash = crypto_hash(result)
         count = 0
         for replica_result_proof in result_proof:
@@ -159,13 +160,13 @@ class Client(process):
             request_id = client_id + '_' + str(i)
             send_request(request_id, request, 0, self.head)
             self.last_result_calc_at_client = self.state_object.evaluate_request(request)
-            output('waiting for result of request id', request_id)
+            output('waiting for result of request id', request_id, level=logging.INFO)
             if await(some(received(('result', _, _, r_id)), has= r_id==request_id) or
                              some(received(('result_olympus', _, r_id)), has= r_id==request_id)):
                 output('result received for request_id', request_id, level=logging.INFO)
             elif timeout(self.TIMER_DURATION):
+                output('timeout occurred for initial request id', request_id, level=logging.CRITICAL)
                 for retry_num in range(NUM_RETRIES):
-                    output('timeout occurred for message request_id', request_id)
                     fetch_config()
                     for replica in self.configuration:
                         send_request(request_id, request, 1, replica)
@@ -174,7 +175,8 @@ class Client(process):
                         output('result received for request_id', request_id, level=logging.INFO)
                         break
                     elif timeout(self.TIMER_DURATION):
-                        output('timeout occurred for retransmitted message request_id', request_id)
+                        output('timeout occurred for retransmitted message request id', request_id,
+                               level=logging.CRITICAL)
                         continue
 
             if some(received(('result_olympus', _, r_id)), has=r_id == request_id):

@@ -107,6 +107,7 @@ class Olympus(process):
         for replica in self.configuration:
             output('sending wedge request to ', replica, level=logging.INFO)
             send(('wedge_request'), to=replica)
+        output('len', len(self.wedged_statements), 't+1', self.t+1, level=logging.INFO)
         await(len(self.wedged_statements) >= (self.t+1))
         output('at least t+1 wedged statememnts received. number of wedged statements received-', len(self.wedged_statements), level=logging.INFO)
         valid_quorum = False
