@@ -8,21 +8,21 @@ class Object:
         return pickle.dumps(self)
 
     def put(self, key, value):
-        print('In put:', key, value)
+        #print('In put:', key, value)
         self.state[key] = value
         return 'OK'
 
     def get(self, key):
-        print('In get:', key)
+        #print('In get:', key)
         try:
-            print('GET for key ', key, 'returning val ', self.state[key])
+            #print('GET for key ', key, 'returning val ', self.state[key])
             return self.state[key]
         except KeyError:
             print('error: key does not exist:', key)
             return ''
 
     def slice(self, key, slice):
-        print('In slice:', key, slice)
+        #print('In slice:', key, slice)
         if key not in self.state.keys():
             return 'fail'
         current_val = self.state[key]
@@ -37,14 +37,14 @@ class Object:
             if rval == '':
                 return 'fail'
             self.state[key] = rval
-            print('Updated key ', key, ' val to ', rval, ' after slicing')
+            #print('Updated key ', key, ' val to ', rval, ' after slicing')
             return 'OK'
         except Exception as e:
             print('Exception while slicing: ', e)
             return 'fail'
 
     def append(self, key, value): # TODO
-        print('In append:', key, value)
+        #print('In append:', key, value)
         if key not in self.state.keys():
             return 'fail'
         self.state[key] += value
@@ -56,7 +56,7 @@ class Object:
             print(key, '->', self.state[key])
 
     def evaluate_request(self, request):
-        print('In evaluate_request:', request)
+        #print('In evaluate_request:', request)
         request = request.strip()
         if request.startswith('get'):
             processed_request = request.strip()[4:-1]

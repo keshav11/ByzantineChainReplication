@@ -753,8 +753,10 @@ class Replica(process):
                                     scenario not in self.failures[INJECTED].get(self.configuration_number, []) and \
                                     scenario not in self.failures[PENDING].get(self.configuration_number, []):
                         #self.failures[PENDING].setdefault(self.configuration_number, []).append(search_str)
-                        output('FAIL ! Detected failure scenario', scenario, 'search str was', search_str,
+                        output('DETECTED ! failure scenario', scenario, 'search str was', search_str,
                                level=logging.CRITICAL)
+                        output('failures data structure is', self.failures, level=logging.DEBUG)
+                        output('message tracker is', self.message_tracker, level=logging.DEBUG)
                         return scenario.split(search_str+',')[1], search_str, scenario
 
             if client_no is None:
@@ -767,10 +769,10 @@ class Replica(process):
                     if search_str in scenario and scenario.startswith(event) and \
                         scenario not in self.failures[INJECTED].get(self.configuration_number, []) and \
                         scenario not in self.failures[PENDING].get(self.configuration_number, []):
-                        output('FAIL ! Detected failure scenario', scenario, 'search str was', search_str,
+                        output('DETECTED ! failure scenario', scenario, 'search str was', search_str,
                                level=logging.CRITICAL)
-                        output('failures data structure is', self.failures, level=logging.INFO)
-                        output('client requests tracker is', self.client_requests_tracker, level=logging.INFO)
+                        output('failures data structure is', self.failures, level=logging.DEBUG)
+                        output('client requests tracker is', self.client_requests_tracker, level=logging.DEBUG)
                         return scenario.split(search_str)[1], event+search_str, scenario
         return False, None, None
 
