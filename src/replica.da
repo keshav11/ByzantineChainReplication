@@ -147,7 +147,7 @@ class Replica(process):
         output('received wedge request from olympus', level=logging.INFO)
         action, trigger, scenario = check_failure_scenario()
         if action:
-            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig']
+            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
             ignore_fail_scen = [fail_scen for fail_scen in ignore_failure_scenarios if fail_scen in action]
             if ignore_fail_scen:
                 output('Failure scenario', scenario, 'encountered. It wont have any effect', level=logging.INFO)
@@ -182,7 +182,7 @@ class Replica(process):
                 (self.replica_id, self.history[:-n], self.last_checkpoint_proof, self.checkpointed_slot))
             send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
         else:
-            output('!!! taking on usual', level=logging.INFO)
+            output('checkpointed slot is', self.checkpointed_slot, level=logging.INFO)
             pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot))
             send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
 
@@ -191,7 +191,7 @@ class Replica(process):
         output('received catch up message from olympus', level=logging.INFO)
         action, trigger, scenario = check_failure_scenario()
         if action:
-            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig']
+            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
             ignore_fail_scen = [fail_scen for fail_scen in ignore_failure_scenarios if fail_scen in action]
             if ignore_fail_scen:
                 output('Failure scenario', scenario, 'encountered. It wont have any effect', level=logging.INFO)
@@ -226,7 +226,7 @@ class Replica(process):
         output('received get running state message from olympus', level=logging.INFO)
         action, trigger, scenario = check_failure_scenario()
         if action:
-            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig']
+            ignore_failure_scenarios = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
             ignore_fail_scen = [fail_scen for fail_scen in ignore_failure_scenarios if fail_scen in action]
             if ignore_fail_scen:
                 output('Failure scenario', scenario, 'encountered. It wont have any effect', level=logging.INFO)
@@ -251,7 +251,8 @@ class Replica(process):
         self.configuration_number = config_no
         action, trigger, scenario = check_failure_scenario()
         if action:
-            put_pending_scenarios_type = ['change_operation', 'change_result', 'drop_checkpt_stmts', 'invalid_order_sig']
+            put_pending_scenarios_type = ['change_operation', 'change_result', 'drop_checkpt_stmts',
+                                          'invalid_order_sig', 'invalid_result_sig']
             pending_scen_type = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scen_type:
                 put_in_pending(scenario)
@@ -292,7 +293,8 @@ class Replica(process):
 
         operation = request
         ok_hash = ''
-        invalid_sig = False
+        invalid_order_sig = False
+        invalid_result_sig = False
         if action:
             if 'crash' in action:
                 inject_crash(action, trigger, scenario)
@@ -310,7 +312,7 @@ class Replica(process):
                 self.failures[PENDING].setdefault(self.configuration_number, []).append(scenario)
 
         pending = False
-        are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig']
+        are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
         for failure in self.failures[PENDING].get(self.configuration_number, []):
             output('checking for pending in', failure, level=logging.INFO)
             pending_fail_type = [fail_type for fail_type in are_pending_failures_type if fail_type in failure]
@@ -326,7 +328,9 @@ class Replica(process):
             pending_to_injected(scenario)
             ok_hash = crypto_hash('OK')
         elif (action and 'invalid_order_sig' in action) or (pending and 'invalid_order_sig' in scenario):
-            invalid_sig = True
+            invalid_order_sig = True
+        elif (action and 'invalid_result_sig' in action) or (pending and 'invalid_result_sig' in scenario):
+            invalid_result_sig = True
 
         order_statement = ('order', self.slot+1, operation, self.replica_id)
         signed_order_statement = sign(order_statement)  # sign order statement
@@ -336,7 +340,7 @@ class Replica(process):
         #output('state object at this moment is', level=logging.INFO)
         #print_state_object()
 
-        if invalid_sig:
+        if invalid_order_sig:
             invalid_signed_order_statement = get_invalid_signature(signed_order_statement)
             order_proof = (self.slot + 1, request_id, request, self, self.configuration,
                            [invalid_signed_order_statement], signed_request)
@@ -346,8 +350,14 @@ class Replica(process):
         self.history.append(order_proof)
         self.slot += 1
         result_hash = ok_hash or crypto_hash(result)
-        signed_result_proof = [sign(('result', request_id, operation,
-                                     self.replica_id, result_hash))]
+        signed_result_statement = sign(('result', request_id, operation, self.replica_id, result_hash))
+
+        if invalid_result_sig:
+            invalid_signed_result_statement = get_invalid_signature(signed_result_statement)
+            signed_result_proof = [invalid_signed_result_statement]
+        else:
+            signed_result_proof = [signed_result_statement]
+
         shuttle = (order_proof, signed_result_proof)
         send(('shuttle', shuttle), to=self.configuration[self.position + 1])
 
@@ -434,7 +444,8 @@ class Replica(process):
             return
         operation = request
         ok_hash = ''
-        invalid_sig = False
+        invalid_order_sig = False
+        invalid_result_sig = False
         if action:
             if 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
@@ -455,7 +466,7 @@ class Replica(process):
                 output('!! put in failures pending', self.failures, level=logging.INFO)
 
         pending = False
-        are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig']
+        are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
         for failure in self.failures[PENDING].get(self.configuration_number, []):
             output('checking for change_operation in', failure, level=logging.INFO)
             pending_fail_type = [fail_type for fail_type in are_pending_failures_type if fail_type in failure]
@@ -471,7 +482,9 @@ class Replica(process):
             pending_to_injected(scenario)
             ok_hash = crypto_hash('OK')
         elif (action and 'invalid_order_sig' in action) or (pending and 'invalid_order_sig' in scenario):
-            invalid_sig = True
+            invalid_order_sig = True
+        elif (action and 'invalid_result_sig' in action) or (pending and 'invalid_result_sig' in scenario):
+            invalid_result_sig = True
 
         order_statement = ('order', self.slot+1, operation, self.replica_id)
         signed_order_statement = sign(order_statement) # sign order statement
@@ -480,7 +493,7 @@ class Replica(process):
         #output('state object at this moment is', level=logging.INFO)
         #print_state_object()
 
-        if invalid_sig:
+        if invalid_order_sig:
             invalid_signed_order_statement = get_invalid_signature(signed_order_statement)
             shuttle[0][5].append(invalid_signed_order_statement)
         else:
@@ -488,7 +501,12 @@ class Replica(process):
 
         result_hash = ok_hash or crypto_hash(result)
         result_statement = sign(('result', request_id, operation, self.replica_id, result_hash))
-        shuttle[1].append(result_statement)
+
+        if invalid_result_sig:
+            invalid_signed_result_statement = get_invalid_signature(result_statement)
+            shuttle[1].append(invalid_signed_result_statement)
+        else:
+            shuttle[1].append(result_statement)
         self.history.append(shuttle[0]) # appending order proof to history
         self.slot += 1
 
@@ -498,6 +516,10 @@ class Replica(process):
             output('tail will send result to client for request id', request_id, level=logging.INFO)
             client = clients[request_id.split('_')[0]]
             send(('result', result, shuttle[1], request_id), to=client)
+            # only send invalid sig to client and not backward in the chain
+            # if invalid_result_sig:
+            #     shuttle[1].remove(invalid_signed_result_statement)
+            #     shuttle[1].append(result_statement)
             self.result_cache[request_id] = (result, shuttle[1])
             if self.position != 0:
                 send(('result_shuttle', result, shuttle), to=self.configuration[self.position-1])
@@ -518,7 +540,7 @@ class Replica(process):
             return
 
         if action:
-            put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'invalid_order_sig']
+            put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'invalid_order_sig', 'invalid_result_sig']
             pending_scen_type = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scen_type:
                 put_in_pending(scenario)
@@ -564,7 +586,8 @@ class Replica(process):
         await(len(self.history) >= checkpt_interval)
         action, trigger, scenario = check_failure_scenario()
         if action:
-            put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'change_result', 'invalid_order_sig']
+            put_pending_scenarios_type = ['change_operation', 'drop_checkpt_stmts', 'change_result',
+                                          'invalid_order_sig', 'invalid_result_sig']
             pending_scen_type = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scen_type:
                 put_in_pending(scenario)
@@ -609,7 +632,7 @@ class Replica(process):
 
         action, trigger, scenario = check_failure_scenario()
         if action:
-            put_pending_scenarios_type = ['change_operation', 'change_result', 'invalid_order_sig']
+            put_pending_scenarios_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
             pending_scenario = [scen_type for scen_type in put_pending_scenarios_type if scen_type in action]
             if pending_scenario:
                 put_in_pending(scenario)
