@@ -185,7 +185,7 @@ class Client(process):
         testing()
         send(('finished_execution'), to=self.olympus)
         await(received(('done')))
-        output('client', self.client_id, 'run finished!')
+        output('client run finished!', level=logging.INFO)
 
     def get_state_obj():
         send(('get_state_obj'), to=self.head)
@@ -196,7 +196,7 @@ class Client(process):
         get_state_obj() # get the state object fro the head
         # compare the contents of the dictionary at client and the dictionary
         # sent from replica for every key.
-        output('##################################COMPARING DICTIONARY##################################')
+        output('##################################COMPARING DICTIONARY##################################', level=logging.INFO)
         for key in self.state_object.state:
             if key in self.replica_state_obj.state:
                 if self.state_object.state[key] == self.replica_state_obj.state[key]:
@@ -212,7 +212,8 @@ class Client(process):
             output('dictionary state at replica is same as dictionary state at client', level=logging.INFO)
         else:
             output('dictionary state at replica is not same as dictionary state at client', level=logging.INFO)
-        output('########################################################################################')
+        output('########################################################################################', level=logging.INFO)
+
         if self.test_case.startswith('verify_result_single_client') \
                 or self.test_case.startswith('client_timeout_testcase'):
             output('Number of correct results received at client-', self.result_count)
