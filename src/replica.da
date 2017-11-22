@@ -766,6 +766,7 @@ class Replica(process):
         return True
 
     def receive(msg= ('get_state_obj'), from_=client):
+        output('get state object request received from olympus', level=logging.INFO)
         send(('state_object', self.state_object), to=client)
 
     # checks validity of result shuttle on backward traversal

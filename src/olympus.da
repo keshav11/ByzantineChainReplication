@@ -336,7 +336,6 @@ class Olympus(process):
         terminate_all_replicas()
         send(('done'), to=self.bcr_main)
         #await(received(('done')))
-
         output('olympus run finished!')
 
     def send_client_public_keys_to_replicas():

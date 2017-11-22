@@ -177,7 +177,7 @@ class Client(process):
         testing()
         send(('finished_execution'), to=self.olympus)
         await(received(('done')))
-        output('client run finished!')
+        output('client', self.client_id, 'run finished!')
 
     def get_state_obj():
         send(('get_state_obj'), to=self.head)
@@ -201,9 +201,9 @@ class Client(process):
         output('dictionary state at client', self.state_object.state, level=logging.INFO)
         output('dictionary state at replica', self.replica_state_obj.state, level=logging.INFO)
         if self.replica_state_obj.state == self.state_object.state:
-            output('dictionary state at replica is same as dictionary state a client', level=logging.INFO)
+            output('dictionary state at replica is same as dictionary state at client', level=logging.INFO)
         else:
-            output('dictionary state at replica is not same as dictionary state a client', level=logging.INFO)
+            output('dictionary state at replica is not same as dictionary state at client', level=logging.INFO)
         output('########################################################################################')
         if self.test_case.startswith('verify_result_single_client') \
                 or self.test_case.startswith('client_timeout_testcase'):
