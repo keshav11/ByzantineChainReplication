@@ -9,7 +9,7 @@ import nacl.exceptions
 import ast
 
 FETCH_CONFIG_PERIOD = 5
-
+NUM_RETRIES = 2
 
 class Client(process):
     def setup(client_id, workload, timeout, test_case):
@@ -162,14 +162,20 @@ class Client(process):
             output('waiting for result of request id', request_id)
             if await(some(received(('result', _, _, r_id)), has= r_id==request_id) or
                              some(received(('result_olympus', _, r_id)), has= r_id==request_id)):
-                output('result received for request_id', request_id)
+                output('result received for request_id', request_id, level=logging.INFO)
             elif timeout(self.TIMER_DURATION):
-                output('timeout occurred for message request_id', request_id)
-                fetch_config()
-                for replica in self.configuration:
-                    send_request(request_id, request, 1, replica)
-                await(some(received(('result', _, _, r_id)), has=r_id == request_id) or
-                      some(received(('result_olympus', _, r_id)), has= r_id==request_id))
+                for retry_num in range(NUM_RETRIES):
+                    output('timeout occurred for message request_id', request_id)
+                    fetch_config()
+                    for replica in self.configuration:
+                        send_request(request_id, request, 1, replica)
+                    if await(some(received(('result', _, _, r_id)), has=r_id == request_id) or
+                      some(received(('result_olympus', _, r_id)), has= r_id==request_id)):
+                        output('result received for request_id', request_id, level=logging.INFO)
+                        break
+                    elif timeout(self.TIMER_DURATION):
+                        output('timeout occurred for retransmitted message request_id', request_id)
+                        continue
 
             if some(received(('result_olympus', _, r_id)), has=r_id == request_id):
                 output('result sent for request_id', request_id, 'by olympus', level=logging.INFO)
