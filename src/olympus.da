@@ -226,7 +226,6 @@ class Olympus(process):
             for order_proof in wedged_statement[1]:
                 if not is_order_proof_valid(order_proof):
                     return False
-
         for w1 in wedged_statements:
             for w2 in wedged_statements:
                 if w1 == w2:
@@ -295,7 +294,8 @@ class Olympus(process):
         return count >= (self.t + 1)
 
     def is_checkpoint_proof_shuttle_valid(checkpt_proof):
-
+        if checkpt_proof is None:
+            return True
         if len(checkpt_proof) != len(self.configuration):
             output('checkpt shuttle verification failed due to insufficient number of checkpt statements',
                    level=logging.CRITICAL)
