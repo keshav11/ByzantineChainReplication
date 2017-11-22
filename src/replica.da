@@ -79,6 +79,7 @@ class Replica(process):
         self.TIMER_DURATION = timeout
         self.last_evaluated_result = {}
         self.last_evaluated_request_id = {}
+        self.sent_reconfig_request = False
         output('failure scen are', failure_scenarios, level=logging.INFO)
         output('replica setup completed', level=logging.DEBUG)
 
@@ -182,9 +183,11 @@ class Replica(process):
                 (self.replica_id, self.history[:-n], self.last_checkpoint_proof, self.checkpointed_slot))
             send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
         else:
-            output('checkpointed slot is', self.checkpointed_slot, level=logging.INFO)
+            output('about to send wedge statement. checkpointed slot is', self.checkpointed_slot, level=logging.INFO)
             pickled_wedged_stmnt = pickle.dumps((self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot))
+            output('!! sending to olympus', self.olympus, 'wedge stmt - ', pickled_wedged_stmnt, level=logging.INFO)
             send(('wedge_statement', sign(pickled_wedged_stmnt)), to=self.olympus)
+            output('sent wedged statement to', self.olympus, level=logging.INFO)
 
     def receive(msg=('catch_up', hist_suffix), from_=sender):
         self.message_tracker[FailureScenarios.CATCH_UP] += 1
@@ -287,8 +290,11 @@ class Replica(process):
         action, trigger, scenario = check_failure_scenario(request_id=request_id, event=event)
         if self.mode != Modes.ACTIVE or not lower_numbered_slots_present(self.slot):
             # holes present in history
-            output('Mode is not active or there are holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('Mode is not active or there are holes in history. checked for slot', self.slot, level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                output('sending reconfiguration request', level=logging.CRITICAL)
+                self.sent_reconfig_request = True
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         operation = request
@@ -393,6 +399,7 @@ class Replica(process):
                 self.client_requests_tracker[client_no][FailureScenarios.FORWARDED_REQUEST] += 1
             else:
                 self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
+                output('tracking client req', self.client_requests_tracker, level=logging.INFO)
 
             if self.mode == Modes.IMMUTABLE:
                 output('Replica is in immutable mode. Ignoring client request', level=logging.INFO)
@@ -434,13 +441,19 @@ class Replica(process):
         self.client_requests_tracker[client_no][FailureScenarios.SHUTTLE] += 1
         action, trigger, scenario = check_failure_scenario(request_id=request_id, event='shuttle')
         if not is_shuttle_valid(shuttle):
-            output('order proof invalid. sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('order proof invalid.', level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                output('sending reconfiguration request', level=logging.CRITICAL)
+                self.sent_reconfig_request = True
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
         if not lower_numbered_slots_present(self.slot):
             # holes present in history
-            output('holes in history. checked for slot', self.slot, 'sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('holes in history. checked for slot', self.slot, level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                output('sending reconfiguration request', level=logging.CRITICAL)
+                self.sent_reconfig_request = True
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
         operation = request
         ok_hash = ''
@@ -535,8 +548,11 @@ class Replica(process):
         action, trigger, scenario = check_failure_scenario(request_id=request_id, event='result_shuttle')
 
         if not is_result_shuttle_valid(result, shuttle):
-            output('shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('shuttle validation failed.', level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                output('sending reconfiguration request', level=logging.CRITICAL)
+                self.sent_reconfig_request = True
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         if action:
@@ -579,8 +595,11 @@ class Replica(process):
         output('CPT !! received checkpt shuttle. position is', self.position, 'slot is', self.slot,
                'len of history is', len(self.history), level=logging.INFO)
         if not is_checkpt_shuttle_valid(checkpt_shuttle):
-            output('checkpt shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('checkpt shuttle validation failed.', level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                output('sending reconfiguration request', level=logging.CRITICAL)
+                self.sent_reconfig_request = True
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         await(len(self.history) >= checkpt_interval)
@@ -626,8 +645,11 @@ class Replica(process):
                'len of history is', len(self.history), level=logging.INFO)
 
         if not is_checkpt_proof_shuttle_valid(checkpt_proof):
-            output('checkpt proof shuttle validation failed. sending reconfiguration request', level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('checkpt proof shuttle validation failed.', level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                output('sending reconfiguration request', level=logging.CRITICAL)
+                self.sent_reconfig_request = True
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
             return
 
         action, trigger, scenario = check_failure_scenario()
@@ -681,8 +703,11 @@ class Replica(process):
             cached_result = self.result_cache[request_id]
             send(('result', cached_result[0], cached_result[1]), to=client)
         elif timeout(self.TIMER_DURATION):
-            output('sending reconfiguration request to olympus', timeout_id, level=logging.CRITICAL)
-            send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
+            output('awaiting for result timed out timeout id', timeout_id, level=logging.CRITICAL)
+            if not self.sent_reconfig_request:
+                self.sent_reconfig_request = True
+                output('sending reconfiguration request timeout is', timeout_id, level=logging.CRITICAL)
+                send(('reconfiguration_request', None, self.replica_id), to=self.olympus)
 
     def lower_numbered_slots_present(slt):
         if not slt:
@@ -724,14 +749,16 @@ class Replica(process):
                 return False, None, None
             for probable_fail_scen in self.client_requests_tracker[client_no]:
                 m = self.client_requests_tracker[client_no][probable_fail_scen]
-                search_str = '(' + str(client_no) + ',' + str(m) + '),'
+                search_str = probable_fail_scen.value+'(' + str(client_no) + ',' + str(m) + '),'
                 for scenario in scenarios:
                     scenario = scenario.strip(' ')
                     if search_str in scenario and scenario.startswith(event) and \
                         scenario not in self.failures[INJECTED].get(self.configuration_number, []) and \
                         scenario not in self.failures[PENDING].get(self.configuration_number, []):
-                        output('FAIL ! Detected failure scenario', scenario, 'action to be taken', scenario.split(search_str)[1],
+                        output('FAIL ! Detected failure scenario', scenario, 'search str was', search_str,
                                level=logging.CRITICAL)
+                        output('failures data structure is', self.failures, level=logging.INFO)
+                        output('client requests tracker is', self.client_requests_tracker, level=logging.INFO)
                         return scenario.split(search_str)[1], event+search_str, scenario
         return False, None, None
 
