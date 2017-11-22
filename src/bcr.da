@@ -3,8 +3,8 @@
 # DONE: validating dictionary
 # DONE: detect proof of misbehavior and send reconfig request
 # DONE: ask olympus if config changed periodically
-# TODO: adding validation of client request by each replica
-# TODO: add validation of client request signatures by olympus
+# DONE: adding validation of client request by each replica
+# DONE: add validation of client request signatures by olympus
 # DONE: use of checkpoint proof during reconfiguration
 # DONE: proof of misbehaviour
 # TODO: how many retries are required by client?
@@ -17,7 +17,7 @@ import random
 import string
 import sys
 import logging
-
+import time
 
 config(channel is fifo)
 olympus_module = import_da('olympus')
@@ -25,7 +25,7 @@ client_module = import_da('client')
 
 
 def main():
-
+    time_start = time.time()
     if len(sys.argv) > 1:
         config_file = sys.argv[1]
     else:
@@ -75,8 +75,11 @@ def main():
     num_replicas = 2*config['t']+1
     olympus = new(olympus_module.Olympus, [num_replicas, clients, failure_scenarios,
                     int(config['head_timeout'])/1000, int(config['nonhead_timeout'])/1000,
-                    config.get('checkpt_interval', 0), int(config['t'])], num=1)
+                    config.get('checkpt_interval', 0), int(config['t']), self], num=1)
     start(olympus)
+    await(received(('done')))
+    time_end = time.time()
+    output('BCR run finished. Time elapsed in seconds', time_end-time_start, level=logging.INFO)
 
 
 # Generates random workload

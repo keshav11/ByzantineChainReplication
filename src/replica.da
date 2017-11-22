@@ -97,8 +97,10 @@ class Replica(process):
             v_key = nacl.signing.VerifyKey(self.olympus_pub_key,
                                            encoder=nacl.encoding.HexEncoder)
         try:
-            v_key.verify(data.message,data.signature)
+            v_key.verify(data)
         except nacl.exceptions.BadSignatureError:
+            return False
+        except:
             return False
 
         output('signature of', type, 'verified', level= logging.DEBUG)
@@ -455,6 +457,9 @@ class Replica(process):
         #output('state object at this moment is', level=logging.INFO)
         #print_state_object()
         shuttle[0][5].append(signed_order_statement)
+        # TEST CODE INVALID SIGNATURE: TODO: REMOVE
+        # invalid_signed_order_statement = get_invalid_signature(signed_order_statement)
+        # shuttle[0][5].append(invalid_signed_order_statement)
 
         result_hash = ok_hash or crypto_hash(result)
         result_statement = sign(('result', request_id, operation, self.replica_id, result_hash))
@@ -632,7 +637,7 @@ class Replica(process):
 
         slot_itr = self.checkpointed_slot+1
         for op in self.history:
-            output('checking lower slots. op', op[0], 'slot_itr', slot_itr, level=logging.INFO)
+            #output('checking lower slots. op', op[0], 'slot_itr', slot_itr, level=logging.INFO)
             if op[0] != slot_itr:
                 return False
             slot_itr+=1
@@ -694,6 +699,16 @@ class Replica(process):
         self.state_object.evaluate_request(request)
         output('state object at this moment is', level=logging.INFO)
         print_state_object()
+
+    def get_invalid_signature(signed_msg):
+        output('creating invalid signature for ', signed_msg, level=logging.INFO)
+        signed_list = list(signed_msg)
+        signed_list[0] = (signed_list[0] + 1) % 256
+        new_signed = bytes(signed_list)
+        invalid_signed_msg = nacl.signing.SignedMessage._from_parts(signed_msg._signature,
+                                                                    signed_msg._message, new_signed)
+        output('invalid signed msg created', invalid_signed_msg)
+        return invalid_signed_msg
 
     def inject_increment_slot(action, trigger, scenario):
         if self.position == 0:
