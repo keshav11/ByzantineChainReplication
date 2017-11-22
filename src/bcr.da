@@ -79,7 +79,7 @@ def main():
     start(olympus)
     await(received(('done')))
     time_end = time.time()
-    output('BCR run finished. Time elapsed in seconds', time_end-time_start, level=logging.INFO)
+    output('BCR run finished. Time elapsed in seconds', time_end-time_start, level=logging.CRITICAL)
 
 
 # Generates random workload

@@ -114,3 +114,8 @@ Test Case 7:
 
 failures[0,0] = client_request(3,1),change_operation(); forwarded_request(0,0),change_operation()
 failures[0,3] = shuttle(0,1),drop_result_stmt()
+
+Phase 3
+---------------
+Test Case 1
+python -m da -n ClientNode --logfile --logfilename logs\phase_3_logs\log_multi_client_multiconfiguration_failure_1.txt -F info --message-buffer-size 100000 src\bcr.da phase_3\multi_client_multiconfiguration_failure_1.txt

@@ -68,6 +68,7 @@ class Olympus(process):
     def receive(msg=('wedge_statement', wedged_stmnt), from_=sender):
         # send(('wedge_statement', sign((self.replica_id, self.history, self.last_checkpoint_proof))), to=self.olympus)
         output('received wedge statement from ', sender, level=logging.INFO)
+
         decoded_req = pickle.loads(get_decoded_msg(wedged_stmnt))
         if not verify(wedged_stmnt, decoded_req[0]):
            output('signature verification failed for wedge statement from', level=logging.INFO)
@@ -98,6 +99,7 @@ class Olympus(process):
         # invalid, ignore
         output('received reconfiguration request from ', sender, level=logging.INFO)
         if self.reconfiguration_in_process:
+            output('reconfiguration already in process...', level=logging.INFO)
             return
         if sender_id not in self.replica_map.keys() and (proof_of_misbehaviour == None or
             result_sent_by_client_valid(proof_of_misbehaviour)):
@@ -107,7 +109,8 @@ class Olympus(process):
         for replica in self.configuration:
             output('sending wedge request to ', replica, level=logging.INFO)
             send(('wedge_request'), to=replica)
-        output('len', len(self.wedged_statements), 't+1', self.t+1, level=logging.INFO)
+
+        output('waiting for wedged statements...t=', self.t, level=logging.INFO)
         await(len(self.wedged_statements) >= (self.t+1))
         output('at least t+1 wedged statememnts received. number of wedged statements received-', len(self.wedged_statements), level=logging.INFO)
         valid_quorum = False
@@ -148,7 +151,7 @@ class Olympus(process):
                     history_to_catch_up = longest_history[(len(longest_history)-slots_behind):]
                     output('sending history to catch up', history_to_catch_up, 'to', replica_id, level=logging.INFO)
                     send(('catch_up', history_to_catch_up), to=self.replica_map[replica_id])
-                await(len(self.caught_up_messages) == len(quorum))
+                await(len(self.caught_up_messages) >= len(quorum))
                 output('received', len(quorum), 'caught up messages', level=logging.INFO)
                 # check if hash in caught_up_messages are same
                 valid_quorum = True
