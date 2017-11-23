@@ -372,7 +372,7 @@ class Olympus(process):
                 timeout = self.head_timeout
                 replica = new(replica_module.Replica, [replica_id, itr, key_pair,
                                                        clients, failure_scenarios.get(itr), timeout, checkpt_interval,
-                                                       self.crypto_keys[1], state_obj], at='HeadNode', num=1)
+                                                       self.crypto_keys[1], state_obj], at='MainNode', num=1)
             else:
                 timeout = self.nonhead_timeout
                 replica = new(replica_module.Replica, [replica_id, itr, key_pair,

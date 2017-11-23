@@ -179,10 +179,18 @@ Test Case 5: multiple_failures_3
 Dictionary content at the end is verified and matches with clients.
 (6) outcome- PASS
 
+Test Case 6: multihost_head_crash
+(1) replicas = 3, clients = 1, total requests among all clients = 5, checkpt_interval = 4, multiple failures leading to one reconfiguration.
+(2) configuration file - multihost_head_crash.txt
+(3) python3 -m da --logfile --logfilename=logs/multihost_head_crash_mainnode.txt --logfilelevel=info --message-buffer-size=100000 -n MainNode -H 172.17.0.2 -R 172.17.0.3 src/bcr.da multihost_head_crash.txt
+python3 -m da --logfile --logfilename=logs/multihost_head_crash_headnode.txt --logfilelevel=info --message-buffer-size=100000 -n HeadNode -D -H 172.17.0.3 -R 172.17.0.2 src/bcr.da multihost_head_crash.txt
 
-Running BCR perform900.txt on docker containers
-python3 -m da --logfile --logfilename=logs/mainnodelog.txt --logfilelevel=critical -L critical --message-buffer-size=96000 -n MainNode -H 172.17.0.2 -R 172.17.0.3 src/bcr.da perform900.txt
-python3 -m da --logfile --logfilename=logs/headnodelog.txt --logfilelevel=critical -L critical --message-buffer-size=96000 -n HeadNode -D -H 172.17.0.3 -R 172.17.0.2 src/bcr.da perform900.txt
+(4) log files
+        logs/multihost_head_crash_mainnode.txt
+        logs/multihost_head_crash_headnode.txt
+(5) Head is running on separate docker container. This is a simple test case where we crash head replica. Reconfiguration is triggered and system resumes to take client requests.
+(6) outcome- PASS
+
 
 =================================================================================================================================================================================
 
@@ -191,3 +199,10 @@ PERFORMANCE EVALUATION
 Raft2 single host - 12.93s
 BCR perform900.txt single host - 19.87s
 BCR perform900.txt on 2 docker containers - 27.10s
+
+Running BCR perform900.txt on docker containers
+python3 -m da --logfile --logfilename=logs/mainnodelog.txt --logfilelevel=critical -L critical --message-buffer-size=100000 -n MainNode -H 172.17.0.2 -R 172.17.0.3 src/bcr.da perform900.txt
+python3 -m da --logfile --logfilename=logs/headnodelog.txt --logfilelevel=critical -L critical --message-buffer-size=100000 -n HeadNode -D -H 172.17.0.3 -R 172.17.0.2 src/bcr.da perform900.txt
+
+================================================================================================================================================================================
+py -m da --logfile --logfilename logs\multiple_clients_checkpt_test.txt -F info --message-buffer-size 100000 -n MainNode src\bcr.da multiple_clients_checkpt.txt
