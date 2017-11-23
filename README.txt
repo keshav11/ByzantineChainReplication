@@ -33,6 +33,7 @@ Not tested with multi host setup
 
 CONTRIBUTIONS
 Keshav Gupta:
+    PHASE 2:
     olympus- create initial configuration: create keys, create, setup, and start processes
     generate pseudorandom workload with good diversity using specified seed
     all key generations and signature checks and validations
@@ -42,14 +43,23 @@ Keshav Gupta:
     statement and signed result statement, send updated shuttle
     check validity of order proof (incl. signatures), add signed order
     check that dictionary contains expected content at end of test cases
+    PHASE 3:
+    reconfiguration flow on replica and olympus
+    sign, validation of client requests
+    ask olympus if config changed periodically, proof of misbehaviour by client
 
 Pratik Sushil Zambani:
+    PHASE 2:
     support configuration files specified in project.txt
     generate request sequence specified in config file
     implementation append and slice in dictionary
     head: handle new request: assign slot, result stmt, send shuttle
     tail: send result to client; send result shuttle to predecessor
     handle result shuttle save, and forward it
+    fault-injection: required triggers
+    fault-injection: required failures
+    PHASE 3:
+    checkpoint flow
     fault-injection: required triggers
     fault-injection: required failures
 
@@ -62,6 +72,7 @@ src/olympus.da
 src/replica.da
 
 CODE SIZE
+Phase 2
 Algorithm
 github.com/AlDanial/cloc v 1.72
 -------------------------------------------------------------------------------
@@ -78,8 +89,25 @@ total
 ~1231
 estimate for test code-  100-150 lines
 
+Phase 3
+---------
+github.com/AlDanial/cloc v 1.74  T=0.50 s (10.0 files/s, 3590.0 lines/s)
+-------------------------------------------------------------------------------
+Language                     files          blank        comment           code
+-------------------------------------------------------------------------------
+DAL                              4            183             13           1509
+Python                           1             12              9             69
+-------------------------------------------------------------------------------
+SUM:                             5            195             22           1578
+-------------------------------------------------------------------------------
+other
+about 450
+total
+~2000
+estimate for test code-  200-300 lines
+
 LANGUAGE FEATURE USAGE.
-list comprehensions- 8
+list comprehensions- 18
 dictionary comprehensions- 0
 set comprehensions- 0
 aggregations- 0
