@@ -135,7 +135,8 @@ class Olympus(process):
                     if replica_hist_max_slots > max_slot:
                         longest_history = replica_hist
                         max_slot = replica_hist_max_slots
-                output('longest history is,', longest_history, level=logging.INFO)
+                output('longest history len is,', len(longest_history), level=logging.INFO)
+                output('longest history is,', longest_history, level=logging.DEBUG)
                 output('max number of slots present in history', max_slot, level=logging.INFO)
                 # ('wedge_statement' - (self.replica_id, self.history, self.last_checkpoint_proof, self.checkpointed_slot)
                 #order_proof = (self.slot + 1, request_id, request, self, self.configuration, [signed_order_statement])

@@ -331,13 +331,11 @@ class Replica(process):
         pending = False
         are_pending_failures_type = ['change_operation', 'change_result', 'invalid_order_sig', 'invalid_result_sig']
         for failure in self.failures[PENDING].get(self.configuration_number, []):
-            output('checking for pending in', failure, level=logging.INFO)
             pending_fail_type = [fail_type for fail_type in are_pending_failures_type if fail_type in failure]
             if pending_fail_type:
                 scenario = failure
                 pending = True
                 break
-        output('pending is', pending, level=logging.INFO)
         if (action and 'change_operation' in action) or (pending and 'change_operation' in scenario):
             pending_to_injected(scenario)
             operation = "get('x')"
@@ -345,8 +343,10 @@ class Replica(process):
             pending_to_injected(scenario)
             ok_hash = crypto_hash('OK')
         elif (action and 'invalid_order_sig' in action) or (pending and 'invalid_order_sig' in scenario):
+            pending_to_injected(scenario)
             invalid_order_sig = True
         elif (action and 'invalid_result_sig' in action) or (pending and 'invalid_result_sig' in scenario):
+            pending_to_injected(scenario)
             invalid_result_sig = True
 
         order_statement = ('order', self.slot+1, operation, self.replica_id)
@@ -410,7 +410,6 @@ class Replica(process):
                 self.client_requests_tracker[client_no][FailureScenarios.FORWARDED_REQUEST] += 1
             else:
                 self.client_requests_tracker[client_no][FailureScenarios.CLIENT_REQUEST] += 1
-                output('tracking client req', self.client_requests_tracker, level=logging.INFO)
 
             if self.mode == Modes.IMMUTABLE:
                 output('Replica is in immutable mode. Ignoring client request', level=logging.INFO)
@@ -500,7 +499,6 @@ class Replica(process):
                 scenario = failure
                 pending = True
                 break
-        output('pending is', pending, level=logging.INFO)
         if (action and 'change_operation' in action) or (pending and 'change_operation' in scenario):
             pending_to_injected(scenario)
             operation = "get('x')"
@@ -508,8 +506,10 @@ class Replica(process):
             pending_to_injected(scenario)
             ok_hash = crypto_hash('OK')
         elif (action and 'invalid_order_sig' in action) or (pending and 'invalid_order_sig' in scenario):
+            pending_to_injected(scenario)
             invalid_order_sig = True
         elif (action and 'invalid_result_sig' in action) or (pending and 'invalid_result_sig' in scenario):
+            pending_to_injected(scenario)
             invalid_result_sig = True
 
         order_statement = ('order', self.slot+1, operation, self.replica_id)

@@ -9,7 +9,7 @@ import nacl.exceptions
 import ast
 
 FETCH_CONFIG_PERIOD = 5
-NUM_RETRIES = 2
+NUM_RETRIES = 3
 
 class Client(process):
     def setup(client_id, workload, timeout, test_case):
