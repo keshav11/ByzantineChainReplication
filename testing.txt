@@ -179,7 +179,10 @@ Test Case 5: multiple_failures_3
 Dictionary content at the end is verified and matches with clients.
 (6) outcome- PASS
 
-
+=================================================================================================================================================================================
 
 PERFORMANCE EVALUATION
+
+Raft2 single host - 12.93
+BCR perform900.txt single host - 19.87
 

@@ -1,0 +1,1 @@
+[2017-11-22 22:54:24,889] bcr.Node_<Node_:bc001>:CRITICAL: BCR run finished. Time elapsed in seconds 19.870594263076782

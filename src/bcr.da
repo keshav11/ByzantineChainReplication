@@ -67,7 +67,7 @@ def main():
             pseudorandom_args = workload[12:].replace('(', '').replace(')', '').split(',')
             workload = pseudorandom(pseudorandom_args[0], int(pseudorandom_args[1]))
         client = new(client_module.Client, [client_id, workload, int(config['client_timeout'])/1000,
-                                            config['test_case_name']], num=1)
+                                            config['test_case_name']], at='MainNode', num=1)
         clients[client_id] = client
         start(client)
 
@@ -75,7 +75,7 @@ def main():
     num_replicas = 2*config['t']+1
     olympus = new(olympus_module.Olympus, [num_replicas, clients, failure_scenarios,
                     int(config['head_timeout'])/1000, int(config['nonhead_timeout'])/1000,
-                    config.get('checkpt_interval', 0), int(config['t']), self], num=1)
+                    config.get('checkpt_interval', 0), int(config['t']), self], at='MainNode', num=1)
     start(olympus)
     await(received(('done')))
     time_end = time.time()

@@ -18,7 +18,7 @@ class Object:
             #print('GET for key ', key, 'returning val ', self.state[key])
             return self.state[key]
         except KeyError:
-            print('error: key does not exist:', key)
+            #print('error: key does not exist:', key)
             return ''
 
     def slice(self, key, slice):
@@ -40,7 +40,7 @@ class Object:
             #print('Updated key ', key, ' val to ', rval, ' after slicing')
             return 'OK'
         except Exception as e:
-            print('Exception while slicing: ', e)
+            #print('Exception while slicing: ', e)
             return 'fail'
 
     def append(self, key, value): # TODO
