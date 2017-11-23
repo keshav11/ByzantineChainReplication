@@ -8,6 +8,8 @@ import nacl.hash
 import nacl.exceptions
 import ast
 
+config(channel is fifo)
+
 FETCH_CONFIG_PERIOD = 5
 NUM_RETRIES = 3
 

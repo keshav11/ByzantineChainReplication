@@ -10,6 +10,8 @@ import time
 import itertools
 import pickle
 
+config(channel is fifo)
+
 class Olympus(process):
     def setup(num_replica, clients, failure_scenarios, head_timeout, nonhead_timeout, checkpt_interval, t, bcr_main):
         self.all_replicas_public_keys = {}
@@ -59,7 +61,7 @@ class Olympus(process):
 
     def receive(msg=('get_config'), from_= client):
         if await(self.reconfiguration_in_process is False):
-            output('reconfiguration complete', level=logging.INFO)
+            output('sending config to', client, level=logging.INFO)
         elif timeout(2):
             output('get_config timed out', level=logging.INFO)
         send(('config', self.configuration, self.configuration_number, self.all_replicas_public_keys), to=client)

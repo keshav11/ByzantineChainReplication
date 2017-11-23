@@ -139,18 +139,47 @@ Test Case 2: cpt_ressig_newcon_ordsig_client_sends_reconfig
         logs\cpt_ressig_newcon_ordsig_client_sends_reconfig.txt
 (5) Replica 1 puts invalid result signature leading to client detecting it. Client sends reconfig request to Olympus.
 New configuration is formed and order statement is incorrectly signed in this config leading to next replica detecting it and another reconfiguration.
-Dictionary content at the end is verified and as expected, it doesn't match since there are multiple clients with different requests that other clients don't know.
+Dictionary content at the end is verified and matches with clients.
 (6) outcome- PASS
 
+Test Case 3: multiple_failures
 
-Test Case 5: no_checkpt_reconfig_retransmit
-(1) replicas = 3, clients = 2, total requests among all clients = 13, checkpt_interval = 1000, crash failure leading to reconfiguration
-(2) configuration file - no_checkpt_reconfig_retransmit.txt
-(3) py -m da --logfile --logfilename logs\no_checkpt_reconfig_retransmit.txt -F info --message-buffer-size 100000 src\bcr.da no_checkpt_reconfig_retransmit.txt
+(1) replicas = 5, clients = 1, total requests among all clients = 20, checkpt_interval = 4, multiple failures leading to couple of reconfigurations.
+(2) configuration file - multiple_failures.txt
+(3) py -m da --logfile --logfilename logs\multiple_failures.txt -F info --message-buffer-size 100000 src\bcr.da multiple_failures.txt
 (4) log files
-        logs\no_checkpt_reconfig_retransmit.txt
-(5) Crash will lead to client request timing out and client will retransmit, leading to head already seeing the request and starting it's own timer.
-On timer expiration, reconfiguration is triggered.
-Dictionary content at the end is verified and as expected, it doesn't match since there are multiple clients with different requests that other clients don't know.
+        logs\multiple_failures.txt
+(5) Change operation is injected which is detected by next replica leading to reconfiguration. On receiving wedge request, replica2 truncates its history.
+In new configuration, sleep is injected leading to client's timer timing out and retransmission of request. On receiving checkpoint proof, increment slot is injected.
+This leads to hole getting detected on next client request and reconfiguration. Drop on get running state is probabilistic since olympus asks only replica for it's running state.
+Dictionary content at the end is verified and matches with clients.
 (6) outcome- PASS
+
+Test Case 4: multiple_failures_2
+
+(1) replicas = 3, clients = 1, total requests among all clients = 20, checkpt_interval = 4, multiple failures leading to three reconfigurations.
+(2) configuration file - multiple_failures_2.txt
+(3) py -m da --logfile --logfilename logs\multiple_failures_2.txt -F info --message-buffer-size 100000 src\bcr.da multiple_failures_2.txt
+(4) log files
+        logs\multiple_failures_2.txt
+(5) Change operation is injected which is detected by next replica leading to reconfiguration. On receiving wedge request, replica2 truncates its history.
+In new configuration, sleep is injected leading to client's timer timing out and retransmission of request. On receiving checkpoint proof, increment slot is injected.
+This leads to hole getting detected on next client request and reconfiguration. Drop on get running state is probabilistic since olympus asks only replica for it's running state.
+Dictionary content at the end is verified and matches with clients.
+(6) outcome- PASS
+
+Test Case 5: multiple_failures_3
+
+(1) replicas = 3, clients = 1, total requests among all clients = 20, checkpt_interval = 4, multiple failures leading to one reconfiguration.
+(2) configuration file - multiple_failures_3.txt
+(3) py -m da --logfile --logfilename logs\multiple_failures_3.txt -F info --message-buffer-size 100000 src\bcr.da multiple_failures_3.txt
+(4) log files
+        logs\multiple_failures_3.txt
+(5) Extra op is applied to running state, on receiving shuttle for client's 2nd request, replica drops result statement leading to reconfiguration. On catch up, we have sleep for one of the replicas.
+Dictionary content at the end is verified and matches with clients.
+(6) outcome- PASS
+
+
+
+PERFORMANCE EVALUATION
 

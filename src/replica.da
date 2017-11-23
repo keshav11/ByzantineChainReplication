@@ -13,6 +13,8 @@ import json
 import os
 import time
 
+config(channel is fifo)
+
 INJECTED = "injected"
 PENDING = "pending"
 
@@ -206,9 +208,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -244,9 +248,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -272,9 +278,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -315,9 +323,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -478,9 +488,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -578,15 +590,19 @@ class Replica(process):
                 decoded_message = ast.literal_eval(shuttle[1][self.position].message.decode())
                 op = decoded_message[2]
                 shuttle[1][self.position] = sign(('result', request_id, op, self.replica_id, crypto_hash('OK')))
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
             elif 'drop_result_stmt' in action:
                 shuttle[1].pop(0)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
             elif 'crash' in action:
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()'))/1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -626,9 +642,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -672,9 +690,11 @@ class Replica(process):
                 inject_crash(action, trigger, scenario)
             elif 'sleep' in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 time.sleep(float(action.strip('sleep()')) / 1000.0)
             elif 'drop' in action and 'drop_checkpt_stmts' not in action:
                 output('trigger failure scenario encountered, action is to', action, level=logging.CRITICAL)
+                self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
                 return
             elif 'extra_op' in action:
                 inject_extra_op(action, trigger, scenario)
@@ -797,6 +817,7 @@ class Replica(process):
         self.state_object.evaluate_request(request)
         output('state object at this moment is', level=logging.INFO)
         print_state_object()
+        self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
 
     def get_invalid_signature(signed_msg):
         output('creating invalid signature for ', signed_msg, level=logging.INFO)
@@ -812,6 +833,7 @@ class Replica(process):
         if self.position == 0:
             self.slot += 1
             output('injecting increment slot, slot now is', self.slot, level=logging.INFO)
+            self.failures[INJECTED].setdefault(self.configuration_number, []).append(scenario)
 
     def inject_crash(action, trigger, scenario):
         output(self.replica_id, 'is crashing...', level=logging.CRITICAL)
