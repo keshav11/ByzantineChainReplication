@@ -179,10 +179,15 @@ Test Case 5: multiple_failures_3
 Dictionary content at the end is verified and matches with clients.
 (6) outcome- PASS
 
+
+Running BCR perform900.txt on docker containers
+python3 -m da --logfile --logfilename=logs/mainnodelog.txt --logfilelevel=critical -L critical --message-buffer-size=96000 -n MainNode -H 172.17.0.2 -R 172.17.0.3 src/bcr.da perform900.txt
+python3 -m da --logfile --logfilename=logs/headnodelog.txt --logfilelevel=critical -L critical --message-buffer-size=96000 -n HeadNode -D -H 172.17.0.3 -R 172.17.0.2 src/bcr.da perform900.txt
+
 =================================================================================================================================================================================
 
 PERFORMANCE EVALUATION
 
-Raft2 single host - 12.93
-BCR perform900.txt single host - 19.87
-
+Raft2 single host - 12.93s
+BCR perform900.txt single host - 19.87s
+BCR perform900.txt on 2 docker containers - 27.10s
